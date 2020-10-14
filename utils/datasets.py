@@ -58,9 +58,13 @@ class ImageFolder(Dataset):
 
 class ListDataset(Dataset):
     def __init__(self, list_path, img_size=416, augment=True, multiscale=True, normalized_labels=True):
+
         with open(list_path, "r") as file:
             self.img_files = file.readlines()
+        for i in range(0,len(self.img_files)):
+            self.img_files[i] = self.img_files[i][0:-1]
 
+        self.img_files = self.img_files[0:10]
         self.label_files = [
             path.replace("images", "labels").replace(".png", ".txt").replace(".jpg", ".txt")
             for path in self.img_files
