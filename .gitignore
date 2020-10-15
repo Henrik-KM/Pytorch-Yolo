@@ -4,7 +4,6 @@ build
 .git
 *.egg-info
 dist
-
 data/coco
 backup
 weights/*.weights
