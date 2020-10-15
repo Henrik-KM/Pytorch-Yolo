@@ -64,7 +64,6 @@ class ListDataset(Dataset):
         for i in range(0,len(self.img_files)):
             self.img_files[i] = self.img_files[i][0:-1]
 
-        self.img_files = self.img_files[0:10]
         self.label_files = [
             path.replace("images", "labels").replace(".png", ".txt").replace(".jpg", ".txt")
             for path in self.img_files
