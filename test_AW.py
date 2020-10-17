@@ -67,8 +67,7 @@ def main():
     nms_thres = 0.5
     n_cpu = 8
     img_size = 416
-    
-    
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     print('Device', device)
@@ -78,7 +77,7 @@ def main():
     class_names = load_classes(data_config["names"])
     
     # Initiate model
-    model = Darknet(model_def).to(device)
+    model = Darknet(model_def, img_size=img_size).to(device)
     if weights_path.endswith(".weights"):
         # Load darknet weights
         model.load_darknet_weights(weights_path)
