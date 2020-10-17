@@ -141,8 +141,8 @@ def main():
         print(" AP: ", AP[i])
       #  print("Class '{c}' ({class_names[c]}) - AP: {AP[i]}")
     
-    print(f"mAP: {AP.mean()}")
-
+   # print(f"mAP: {AP.mean()}")
+    print("\n mAP: ", AP.mean())
 
 #if __name__ == "__main__":
 if __name__ == '__main__' and '__file__' in globals():
