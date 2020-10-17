@@ -97,7 +97,17 @@ def main():
     #     batch_size=8,
     # )
     path=valid_path
-    
+
+    list_path=path
+    imgFiles = []
+    with open(list_path, "r") as file:
+        basePath = "data/custom/images/"#file.readlines()[0]
+        for animal in os.listdir(basePath):
+            for img in os.listdir(basePath+"/"+animal):
+                imgFiles = np.append(imgFiles,basePath+"/"+animal+"/"+img)
+                with open("valid.txt", "a+") as file:
+                    file.write(basePath+animal+"/"+img+"\n")
+
     # Get dataloader
     dataset = ListDataset(path, img_size=img_size, augment=False, multiscale=False)
     dataloader = torch.utils.data.DataLoader(
@@ -150,13 +160,14 @@ if __name__ == '__main__' and '__file__' in globals():
 
 #%%
 if False:
-    list_path=path
+    list_path = path
     imgFiles = []
     with open(list_path, "r") as file:
-        basePath = "data/custom/images/"#file.readlines()[0]
+        basePath = "data/custom/images/"  # file.readlines()[0]
         for animal in os.listdir(basePath):
-            for img in os.listdir(basePath+"/"+animal):
-                imgFiles = np.append(imgFiles,basePath+"/"+animal+"/"+img)
+            for img in os.listdir(basePath + "/" + animal):
+                imgFiles = np.append(imgFiles, basePath + "/" + animal + "/" + img)
                 with open("valid.txt", "a+") as file:
-                    file.write(basePath+animal+"/"+img+"\n")
+                    file.write(basePath + animal + "/" + img + "\n")
+
             
