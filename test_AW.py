@@ -70,7 +70,9 @@ def main():
     
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
+    print('Device', device)
+
     data_config = parse_data_config(data_config)
     valid_path = data_config["valid"]
     class_names = load_classes(data_config["names"])
@@ -100,7 +102,7 @@ def main():
     # Get dataloader
     dataset = ListDataset(path, img_size=img_size, augment=False, multiscale=False)
     dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, shuffle=False, num_workers=0, collate_fn=dataset.collate_fn
+        dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=dataset.collate_fn
     )
     
     Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
@@ -133,7 +135,11 @@ def main():
     
     print("Average Precisions:")
     for i, c in enumerate(ap_class):
-        print(f"+ Class '{c}' ({class_names[c]}) - AP: {AP[i]}")
+        #print(f"+ Class '{c}' ({class_names[c]}) - AP: {AP[i]}")
+        print("Class ", c)
+        print(" class name ", class_names[c])
+        print(" AP: ", AP[i])
+      #  print("Class '{c}' ({class_names[c]}) - AP: {AP[i]}")
     
     print(f"mAP: {AP.mean()}")
 
