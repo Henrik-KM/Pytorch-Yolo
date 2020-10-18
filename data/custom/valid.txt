@@ -29,6 +29,9 @@ data/custom/images/buffalo/084.jpg
 data/custom/images/buffalo/087.jpg
 data/custom/images/buffalo/090.jpg
 data/custom/images/buffalo/093.jpg
+
+data/custom/images/buffalo/095.jpg
+
 data/custom/images/buffalo/096.jpg
 data/custom/images/buffalo/099.jpg
 data/custom/images/buffalo/102.jpg
@@ -60,6 +63,7 @@ data/custom/images/buffalo/177.jpg
 data/custom/images/buffalo/180.jpg
 data/custom/images/buffalo/183.jpg
 data/custom/images/buffalo/186.jpg
+
 data/custom/images/buffalo/189.jpg
 data/custom/images/buffalo/192.jpg
 data/custom/images/buffalo/195.jpg
@@ -154,6 +158,10 @@ data/custom/images/elephant/083.jpg
 data/custom/images/elephant/086.jpg
 data/custom/images/elephant/089.jpg
 data/custom/images/elephant/092.jpg
+
+data/custom/images/buffalo/187.jpg
+data/custom/images/buffalo/188.jpg
+
 data/custom/images/elephant/095.jpg
 data/custom/images/elephant/098.jpg
 data/custom/images/elephant/101.jpg
@@ -186,6 +194,7 @@ data/custom/images/elephant/179.jpg
 data/custom/images/elephant/182.jpg
 data/custom/images/elephant/185.jpg
 data/custom/images/elephant/188.jpg
+
 data/custom/images/elephant/191.jpg
 data/custom/images/elephant/194.jpg
 data/custom/images/elephant/197.jpg
@@ -280,6 +289,9 @@ data/custom/images/rhino/086.jpg
 data/custom/images/rhino/089.jpg
 data/custom/images/rhino/092.jpg
 data/custom/images/rhino/095.jpg
+
+data/custom/images/rhino/096.jpg
+data/custom/images/rhino/097.jpg
 data/custom/images/rhino/098.jpg
 data/custom/images/rhino/101.jpg
 data/custom/images/rhino/104.jpg
@@ -405,6 +417,9 @@ data/custom/images/zebra/085.jpg
 data/custom/images/zebra/088.jpg
 data/custom/images/zebra/091.jpg
 data/custom/images/zebra/094.jpg
+
+data/custom/images/rhino/192.jpg
+data/custom/images/zebra/096.jpg
 data/custom/images/zebra/097.jpg
 data/custom/images/zebra/100.jpg
 data/custom/images/zebra/103.jpg
@@ -499,3 +514,6 @@ data/custom/images/zebra/370.jpg
 data/custom/images/zebra/373.jpg
 data/custom/images/zebra/376.jpg
 data/custom/images/zebra/379.jpg
+
+data/custom/images/zebra/189.jpg
+data/custom/images/zebra/190.jpg

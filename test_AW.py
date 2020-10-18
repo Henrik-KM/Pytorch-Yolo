@@ -27,7 +27,7 @@ def evaluate(model, path, iou_thres, conf_thres, nms_thres, img_size, batch_size
     # Get dataloader
     dataset = ListDataset(path, img_size=img_size, augment=False, multiscale=False)
     dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=dataset.collate_fn
+        dataset, batch_size=batch_size, shuffle=False, num_workers=1, collate_fn=dataset.collate_fn
     )
 
     Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
@@ -67,16 +67,17 @@ def main():
     nms_thres = 0.5
     n_cpu = 8
     img_size = 416
-    
-    
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
+    print('Device', device)
+
     data_config = parse_data_config(data_config)
     valid_path = data_config["valid"]
     class_names = load_classes(data_config["names"])
     
     # Initiate model
-    model = Darknet(model_def).to(device)
+    model = Darknet(model_def, img_size=img_size).to(device)
     if weights_path.endswith(".weights"):
         # Load darknet weights
         model.load_darknet_weights(weights_path)
@@ -96,11 +97,21 @@ def main():
     #     batch_size=8,
     # )
     path=valid_path
-    
+
+    list_path=path
+    imgFiles = []
+    with open(list_path, "r") as file:
+        basePath = "data/custom/images/"#file.readlines()[0]
+        for animal in os.listdir(basePath):
+            for img in os.listdir(basePath+"/"+animal):
+                imgFiles = np.append(imgFiles,basePath+"/"+animal+"/"+img)
+                with open("valid.txt", "a+") as file:
+                    file.write(basePath+animal+"/"+img+"\n")
+
     # Get dataloader
     dataset = ListDataset(path, img_size=img_size, augment=False, multiscale=False)
     dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, shuffle=False, num_workers=0, collate_fn=dataset.collate_fn
+        dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=dataset.collate_fn
     )
     
     Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
@@ -133,10 +144,14 @@ def main():
     
     print("Average Precisions:")
     for i, c in enumerate(ap_class):
-        print(f"+ Class '{c}' ({class_names[c]}) - AP: {AP[i]}")
+        #print(f"+ Class '{c}' ({class_names[c]}) - AP: {AP[i]}")
+        print("Class ", c)
+        print(" class name ", class_names[c])
+        print(" AP: ", AP[i])
+      #  print("Class '{c}' ({class_names[c]}) - AP: {AP[i]}")
     
-    print(f"mAP: {AP.mean()}")
-
+   # print(f"mAP: {AP.mean()}")
+    print("\n mAP: ", AP.mean())
 
 #if __name__ == "__main__":
 if __name__ == '__main__' and '__file__' in globals():
@@ -144,6 +159,7 @@ if __name__ == '__main__' and '__file__' in globals():
    main()
 
 #%%
+
 if True:
   #  list_path=path
     counter=0
@@ -159,3 +175,6 @@ if True:
                 with open("valid.txt", "a+") as file:
                     file.write(basePath+animal+"/"+img+"\n")
 
+
+
+            
