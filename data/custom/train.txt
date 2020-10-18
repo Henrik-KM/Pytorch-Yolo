@@ -119,7 +119,7 @@ data/custom/images/buffalo/176.jpg
 data/custom/images/buffalo/178.jpg
 data/custom/images/buffalo/179.jpg
 data/custom/images/buffalo/181.jpg
-data/custom/images/buffalo/182.JPG
+data/custom/images/buffalo/182.jpg
 data/custom/images/buffalo/184.jpg
 data/custom/images/buffalo/185.jpg
 data/custom/images/buffalo/187.jpg
