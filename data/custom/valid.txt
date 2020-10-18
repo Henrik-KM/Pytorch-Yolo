@@ -155,10 +155,8 @@ data/custom/images/elephant/083.jpg
 data/custom/images/elephant/086.jpg
 data/custom/images/elephant/089.jpg
 data/custom/images/elephant/092.jpg
-
 data/custom/images/buffalo/187.jpg
 data/custom/images/buffalo/188.jpg
-
 data/custom/images/elephant/095.jpg
 data/custom/images/elephant/098.jpg
 data/custom/images/elephant/101.jpg
