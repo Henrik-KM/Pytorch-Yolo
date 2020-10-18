@@ -392,7 +392,7 @@ data/custom/images/elephant/210.jpg
 data/custom/images/elephant/211.jpg
 data/custom/images/elephant/213.jpg
 data/custom/images/elephant/214.jpg
-data/custom/images/elephant/216.JPG
+data/custom/images/elephant/216.jpg
 data/custom/images/elephant/217.jpg
 data/custom/images/elephant/219.jpg
 data/custom/images/elephant/220.jpg
@@ -536,7 +536,7 @@ data/custom/images/rhino/050.jpg
 data/custom/images/rhino/051.jpg
 data/custom/images/rhino/053.jpg
 data/custom/images/rhino/054.jpg
-data/custom/images/rhino/056.JPG
+data/custom/images/rhino/056.jpg
 data/custom/images/rhino/057.jpg
 data/custom/images/rhino/059.jpg
 data/custom/images/rhino/060.jpg
@@ -1242,7 +1242,7 @@ data/custom/images/rhino/052.jpg
 data/custom/images/rhino/053.jpg
 data/custom/images/rhino/054.jpg
 data/custom/images/rhino/055.jpg
-data/custom/images/rhino/056.JPG
+data/custom/images/rhino/056.jpg
 data/custom/images/rhino/057.jpg
 data/custom/images/rhino/058.jpg
 data/custom/images/rhino/059.jpg

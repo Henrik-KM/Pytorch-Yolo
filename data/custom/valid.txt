@@ -29,9 +29,7 @@ data/custom/images/buffalo/084.jpg
 data/custom/images/buffalo/087.jpg
 data/custom/images/buffalo/090.jpg
 data/custom/images/buffalo/093.jpg
-
 data/custom/images/buffalo/095.jpg
-
 data/custom/images/buffalo/096.jpg
 data/custom/images/buffalo/099.jpg
 data/custom/images/buffalo/102.jpg
