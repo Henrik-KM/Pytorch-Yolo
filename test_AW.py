@@ -144,14 +144,18 @@ if __name__ == '__main__' and '__file__' in globals():
    main()
 
 #%%
-if False:
-    list_path=path
-    imgFiles = []
-    with open(list_path, "r") as file:
-        basePath = "data/custom/images/"#file.readlines()[0]
-        for animal in os.listdir(basePath):
-            for img in os.listdir(basePath+"/"+animal):
-                imgFiles = np.append(imgFiles,basePath+"/"+animal+"/"+img)
+if True:
+  #  list_path=path
+    counter=0
+
+    basePath = "data/custom/images/"#file.readlines()[0]
+    for animal in os.listdir(basePath):
+        for img in os.listdir(basePath+"/"+animal):
+            counter+=1
+            if counter % 3:
+                with open("train.txt", "a+") as file:
+                    file.write(basePath+animal+"/"+img+"\n")
+            else: 
                 with open("valid.txt", "a+") as file:
                     file.write(basePath+animal+"/"+img+"\n")
-            
+
