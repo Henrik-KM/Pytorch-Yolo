@@ -85,9 +85,10 @@ class ListDataset(Dataset):
 
         img_path = self.img_files[index % len(self.img_files)].rstrip()
 
-        # Extract image as PyTorch tensor
-        img = transforms.ToTensor()(Image.open(img_path).convert('RGB'))
-
+        # Extract image as PyTorch tensor, apply random noise and normalize with the mean and std of the ImageNet database (which DarkNet was trained on)
+        img = transforms.Compose([transforms.RandomApply([transforms.ColorJitter(brightness=np.random.rand(), contrast=np.random.rand(), saturation=np.random.rand(), hue=np.random.rand()*0.5)], p=0.5),transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                  std=[0.229, 0.224, 0.225])])(Image.open(img_path).convert('RGB'))
+ ##Normalize by mean and std of ImageNet database
         # Handle images with less than three channels
         if len(img.shape) != 3:
             img = img.unsqueeze(0)
