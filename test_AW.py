@@ -163,7 +163,7 @@ if __name__ == '__main__' and '__file__' in globals():
 if True:
   #  list_path=path
     counter=0
-
+    print("creating files")
     basePath = "data/custom/images/"#file.readlines()[0]
     for animal in os.listdir(basePath):
         for img in os.listdir(basePath+"/"+animal):
@@ -176,5 +176,5 @@ if True:
                     file.write(basePath+animal+"/"+img+"\n")
 
 
-
+    print("files created")
             
