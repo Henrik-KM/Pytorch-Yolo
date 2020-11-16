@@ -143,7 +143,9 @@ class YOLOLayer(nn.Module):
         self.img_dim = img_dim
         num_samples = x.size(0)
         grid_size = x.size(2)
-
+        print(x.shape)
+        print(self.num_classes)
+        print(grid_size)
         prediction = (
             x.view(num_samples, self.num_anchors, self.num_classes + 5, grid_size, grid_size)
             .permute(0, 1, 3, 4, 2)
@@ -254,7 +256,7 @@ class Darknet(nn.Module):
         layer_outputs, yolo_outputs = [], []
         for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
             if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
-                x = module(x)
+                x = module(x.float()) ###¤ Modified! - remove float
             elif module_def["type"] == "route":
                 x = torch.cat([layer_outputs[int(layer_i)] for layer_i in module_def["layers"].split(",")], 1)
             elif module_def["type"] == "shortcut":

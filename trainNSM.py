@@ -1,9 +1,9 @@
 from __future__ import division
-# runfile('C:/Users/ccx55/Documents/GitHub/Pytorch-Yolo/train.py',args='--data_config config/custom.data --n_cpu 0')
+
 from models import *
 from utils.logger import *
 from utils.utils import *
-from utils.datasetsNSM import *
+from utils.datasets import *
 from utils.parse_config import *
 import test
 
@@ -14,6 +14,9 @@ import sys
 import time
 import datetime
 import argparse
+import numpy as np
+import Image
+import GenerateYOLOData
 
 import torch
 from torch.utils.data import DataLoader
@@ -63,16 +66,7 @@ if __name__ == "__main__":
         else:
             model.load_darknet_weights(opt.pretrained_weights)
 
-    # Get dataloader
-    dataset = ListDataset(train_path, augment=True, multiscale=opt.multiscale_training)
-    dataloader = torch.utils.data.DataLoader(
-        dataset,
-        batch_size=opt.batch_size,
-        shuffle=True,
-        num_workers=opt.n_cpu,
-        pin_memory=True,
-        collate_fn=dataset.collate_fn,
-    )
+
 
     optimizer = torch.optim.Adam(model.parameters())
 
@@ -99,16 +93,66 @@ if __name__ == "__main__":
     for epoch in range(opt.epochs):
         model.train()
         start_time = time.time()
+        #Generate data 
+        print_labels=False
+        batchSize = 1
+        Int = lambda: 1.05e-3*(0.08+0.8*np.random.rand())
+        Ds = lambda: 0.10*np.sqrt((0.05 + 1.0*np.random.rand()))
+        st = lambda: 0.04 + 0.01*np.random.rand()
+        
+    
+        length = 512
+        times = 128
+        
+        dA = lambda: 0.00006 * (0.7 + np.random.rand())
+        dX = lambda: 0.00006* (0.7 + np.random.rand())
+        bgnoiselev = lambda: 0.0006* (0.7 + np.random.rand())
+    
+        time_reduction = 16
+        length_reduction = 64
+        downsampling_factor_for_length = 1
+        nump=2 #number of particles
+        data_generator = GenerateYOLOData.Generate8b8batchboxesv2Generator(bgnoiselev=bgnoiselev,
+                                                         Int=Int,
+                                                         st=st,
+                                                         Ds=Ds, 
+                                                         dA=dA,
+                                                         dX=dX,
+                                                         batchsize=batchSize,
+                                                         length=length,
+                                                         times=times,
+                                                         bgexp=None,
+                                                         print_labels=print_labels,
+                                                         time_reduction=time_reduction,
+                                                         length_reduction=length_reduction,
+                                                         downsampling_factor_for_length=downsampling_factor_for_length,
+                                                         nump=nump)
+        val,valL,v1 = next(data_generator)
+        
+        val=val[...,:1]
+        valld = valL[0]
+        
+        YOLOLabels=GenerateYOLOData.ConvertTrajToBoundingBoxes(v1,batchSize,nump,length=512,times=128,treshold=0.5)
+        v1 = np.sum(v1[0,...],0).T
+        # Get dataloader
+        dataset = ListDataset(train_path, augment=False, multiscale=opt.multiscale_training)
+        dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=opt.batch_size,
+        shuffle=True,
+        num_workers=opt.n_cpu,
+        pin_memory=True,
+        collate_fn=dataset.collate_fn,
+    )
         for batch_i, (_, imgs, targets) in enumerate(dataloader):
-            batches_done = len(dataloader) * epoch + batch_i
+            
+            
+            
+            batches_done = len(dataloader) * epoch + batch_i #!!
 
-            if len(imgs) == opt.batch_size:
-                imgs = torch.stack(imgs)
-                
-            imgs = Variable(imgs.to(device))
-            targets = Variable(targets.to(device), requires_grad=False)
+            imgs = Variable(v1.to(device))
+            targets = Variable(YOLOLabels.to(device), requires_grad=False)
 
-            model=model.float()
             loss, outputs = model(imgs, targets)
             loss.backward()
 
