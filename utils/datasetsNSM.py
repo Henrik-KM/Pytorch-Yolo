@@ -288,10 +288,12 @@ def ConvertTrajToBoundingBoxes(v1,batchSize,nump,length=512,times=128,treshold=0
         for k in range(0,nump):
             p = v1[j,k,...]
             particleOccurence = np.where(p>treshold)
-            x1,x2 = particleOccurence[0][0],particleOccurence[0][-1]
-            y1,y2 = np.min(particleOccurence[1]),np.max(particleOccurence[1])
-            YOLOLabels[j,k,:] = 0, np.abs(x2+x1)/2/(times-1), (y2+y1)/2/(length-1),(x2-x1)/(times-1),(y2-y1)/(length-1)
-
+            if not np.size(particleOccurence)  == 0:
+                x1,x2 = particleOccurence[0][0],particleOccurence[0][-1]
+                y1,y2 = np.min(particleOccurence[1]),np.max(particleOccurence[1])
+                YOLOLabels[j,k,:] = 0, np.abs(x2+x1)/2/(times-1), (y2+y1)/2/(length-1),(x2-x1)/(times-1),(y2-y1)/(length-1)
+            else:
+                YOLOLabels = np.delete(YOLOLabels,[j,k],1)
         return YOLOLabels
 
 
@@ -356,6 +358,7 @@ class ListDataset(Dataset):
         self.min_size = self.img_size - 3 * 32
         self.max_size = self.img_size + 3 * 32
         self.batch_count = 0
+        self.totalData = 1000
 
     def __getitem__(self, index):
 
@@ -461,4 +464,4 @@ class ListDataset(Dataset):
         return paths, imgs, targets
 
     def __len__(self):
-        return 100000
+        return self.totalData
