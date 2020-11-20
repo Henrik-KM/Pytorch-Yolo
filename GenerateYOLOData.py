@@ -272,17 +272,22 @@ def ConvertTrajToBoundingBoxes(v1,batchSize,nump,length=512,times=128,treshold=0
     #Y_CENTER_NORM = Y_CENTER_ABS/IMAGE_HEIGHT
     #WIDTH_NORM = WIDTH_OF_LABEL_ABS/IMAGE_WIDTH
     #HEIGHT_NORM = HEIGHT_OF_LABEL_ABS/IMAGE_HEIGHT
-    for j in range(0,batchSize):
-        for k in range(0,nump):
-            p = v1[j,k,...]
-            particleOccurence = np.where(p>treshold)
-            if not np.size(particleOccurence)  == 0:
-                x1,x2 = particleOccurence[0][0],particleOccurence[0][-1]
-                y1,y2 = np.min(particleOccurence[1]),np.max(particleOccurence[1])
-                YOLOLabels[j,k,:] = 0, np.abs(x2+x1)/2/(times-1), (y2+y1)/2/(length-1),(x2-x1)/(times-1),(y2-y1)/(length-1)
-            else:
-                YOLOLabels = np.delete(YOLOLabels,[j,k],1)
-        return YOLOLabels
+    try:
+        for j in range(0,batchSize):
+            for k in range(0,nump):
+                p = v1[j,k,...]
+                particleOccurence = np.where(p>treshold)
+                if not np.size(particleOccurence)  == 0:
+                    x1,x2 = particleOccurence[0][0],particleOccurence[0][-1]
+                    y1,y2 = np.min(particleOccurence[1]),np.max(particleOccurence[1])
+                    
+                    YOLOLabels[j,k,:] = 0, np.abs(x2+x1)/2/(times-1), (y2+y1)/2/(length-1),(x2-x1)/(times-1),(y2-y1)/(length-1)
+                else:
+                    YOLOLabels = np.delete(YOLOLabels,[j,k],1)
+    except:
+        print("Label generation failed. Continuing..")
+
+    return YOLOLabels
 
 def ClusterSeparateParticles(traj):
     traj = v1.T
