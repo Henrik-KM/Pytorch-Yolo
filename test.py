@@ -41,6 +41,8 @@ def evaluate(model, path, iou_thres, conf_thres, nms_thres, img_size, batch_size
         targets[:, 2:] = xywh2xyxy(targets[:, 2:])
         targets[:, 2:] *= img_size
 
+        if len(imgs) == opt.batch_size:
+            imgs = torch.stack(imgs)
         imgs = Variable(imgs.type(Tensor), requires_grad=False)
 
         with torch.no_grad():

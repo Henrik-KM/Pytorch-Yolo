@@ -10,3 +10,4 @@ weights/*.weights
 __pycache__
 checkpoints
 *.v2
+*.74
