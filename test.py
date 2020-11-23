@@ -43,7 +43,11 @@ def evaluate(model, path, iou_thres, conf_thres, nms_thres, img_size, batch_size
 
         if len(imgs) == batch_size:
             imgs = torch.stack(imgs)
-        imgs = Variable(imgs.type(Tensor), requires_grad=False)
+        try:
+            imgs = Variable(imgs.type(Tensor), requires_grad=False)
+        except:
+            imgs = torch.stack(imgs)
+            imgs = Variable(imgs.type(Tensor), requires_grad=False)
 
         with torch.no_grad():
             outputs = model(imgs)
