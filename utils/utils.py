@@ -200,10 +200,15 @@ def bbox_iou(box1, box2, x1y1x2y2=True):
         b1_y1, b1_y2 = box1[:, 1] - box1[:, 3] / 2, box1[:, 1] + box1[:, 3] / 2
         b2_x1, b2_x2 = box2[:, 0] - box2[:, 2] / 2, box2[:, 0] + box2[:, 2] / 2
         b2_y1, b2_y2 = box2[:, 1] - box2[:, 3] / 2, box2[:, 1] + box2[:, 3] / 2
+
     else:
         # Get the coordinates of bounding boxes
-        b1_x1, b1_y1, b1_x2, b1_y2 = box1[:, 0], box1[:, 1], box1[:, 2], box1[:, 3]
-        b2_x1, b2_y1, b2_x2, b2_y2 = box2[:, 0], box2[:, 1], box2[:, 2], box2[:, 3]
+        try:
+            b1_x1, b1_y1, b1_x2, b1_y2 = box1[:, 0], box1[:, 1], box1[:, 2], box1[:, 3]
+            b2_x1, b2_y1, b2_x2, b2_y2 = box2[:, 0], box2[:, 1], box2[:, 2], box2[:, 3]
+        except:
+            b1_x1, b1_y1, b1_x2, b1_y2 = box1[0], box1[1], box1[2], box1[3]
+            b2_x1, b2_y1, b2_x2, b2_y2 = box2[0], box2[1], box2[2], box2[3]
 
     # get the corrdinates of the intersection rectangle
     inter_rect_x1 = torch.max(b1_x1, b2_x1)
@@ -263,7 +268,78 @@ def non_max_suppression(prediction, conf_thres=0.5, nms_thres=0.4):
 
     return output
 
+def remove_traj_overlap(prediction, overlap_thres=0.4):
+    """
+    Removes detections with lower object confidence score than 'conf_thres' and performs
+    Non-Maximum Suppression to further filter detections.
+    Returns detections with shape:
+        (x1, y1, x2, y2, object_conf, class_score, class_pred)
+    """
+   #  output = []
+   #  while len(prediction[0]) > 1:
+   #      for i in range(len(prediction[0])-1):
+   #         overlap = bbox_iou(prediction[0][0],prediction[0][i+1], x1y1x2y2=True)
+   #          if overlap > overlap_thres:
+   #              prediction[0] = prediction[0][2:]
+   #              break
+   #        #  else: 
+   #         #     prediction[0] = prediction[]
+    
+   # # output = 
+   #  if len(prediction[0]) == 0:
+   #      prediction = None
+        
+   #  return prediction
+   
+    #  output = []
+    #  while len(prediction[0]) > 1:
+    #         overlap = bbox_iou(prediction[0][0],prediction[0][1], x1y1x2y2=True)
+    #          if overlap > overlap_thres:
+    #              prediction[0] = prediction[0][2:]
+    #          else: 
+    #              output.extend(prediction[0][0])
+    #              prediction[0] = prediction[0][2:]
+    
+    # # output = 
+    #  if len(prediction[0]) == 0:
+    #      prediction = None
+        
+    #  return prediction
+    
+    output = [None for _ in range(len(prediction[0]))]
+    while len(prediction[0]) > 0:
+        success = True
+        for i in range(len(prediction[0])-1):   
+           overlap = bbox_iou(prediction[0][0],prediction[0][i+1], x1y1x2y2=True)
+           if overlap > overlap_thres:
+                prediction[0] = prediction[0][1:]
+                prediction[0] = torch.cat((prediction[0][:i], prediction[0][i+1:]))
+                success = False
+                break
+            
+        if success:
+            if output[0] == None:
+                counter = 0
+                output[0] = prediction[0][0]
+                prediction[0] = prediction[0][1:]
+                counter+=1
+            else:
+               output[counter] = prediction[0][0]#torch.cat((output,prediction[0][0]),axis=1)
+               prediction[0] = prediction[0][1:]
 
+    if output[0] is not None:
+       output = torch.stack(output)
+            
+    return [output]
+
+    # for i in range(len(prediction[0])-1):
+    #     for j in range(len(prediction[0])-1):
+    #         if prediction[0][0] is not None and prediction[0][i+1] is not None:
+    #             overlap = bbox_iou(prediction[0][0],prediction[0][i+1], x1y1x2y2=True)
+    #             if overlap > overlap_thres:
+    #                 prediction[0][0] = None
+    #                 prediction[0][i+1] = None
+                    
 def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
 
     ByteTensor = torch.cuda.ByteTensor if pred_boxes.is_cuda else torch.ByteTensor
