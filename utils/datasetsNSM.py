@@ -20,11 +20,11 @@ import skimage.measure
 unet=tf.keras.models.load_model('../../input/network-weights/unet-1-dec-1415.h5',compile=False)
 print_labels = False
 
-length = 512
-L_reduction_factor = 4
+length = 256
+L_reduction_factor = 1
 reduced_length = int(length/L_reduction_factor)
 
-times = 512
+times = 256
 T_reduction_factor = 1
 reduced_times = int(times/T_reduction_factor)
 
