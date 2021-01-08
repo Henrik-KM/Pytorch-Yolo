@@ -337,6 +337,7 @@ class ListDataset(Dataset):
         print("creating image")
         im=image.update().resolve()#(dX=dX,dA=dA,noise_lev=bgnoiselev,biglam=.3+.5*np.random.randn(),bgnoiseCval=bgnoiseCval,bgnoise=bgnoiselev,bigx0=0)
         v1 = unet.predict(np.expand_dims(im[...,0],axis=0))
+        print("creating labels")
         YOLOLabels = ConvertTrajToBoundingBoxes(im,length=length,times=times,treshold=0.5)
         plt.imshow(v1,aspect='auto')
         v1 = np.sum(v1,1).T
@@ -357,7 +358,6 @@ class ListDataset(Dataset):
         # ---------
         #  Label
         # ---------
-        print("Creating labels")
         targets = None       
         boxes = torch.from_numpy(YOLOLabels).reshape(-1,5)#torch.from_numpy(np.loadtxt(label_path).reshape(-1, 5))
         # Extract coordinates for unpadded + unscaled image
