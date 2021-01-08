@@ -336,10 +336,11 @@ class ListDataset(Dataset):
         
         print("creating image")
         im=image.update().resolve()#(dX=dX,dA=dA,noise_lev=bgnoiselev,biglam=.3+.5*np.random.randn(),bgnoiseCval=bgnoiseCval,bgnoise=bgnoiselev,bigx0=0)
+        print("predicting with GAN")
         v1 = unet.predict(np.expand_dims(im[...,0],axis=0))
         print("creating labels")
         YOLOLabels = ConvertTrajToBoundingBoxes(im,length=length,times=times,treshold=0.5)
-        plt.imshow(v1,aspect='auto')
+        plt.imshow(np.squeeze(v1).T,aspect='auto')
         v1 = np.sum(v1,1).T
         # Extract image as PyTorch tensor
         img = transforms.ToTensor()(v1)
