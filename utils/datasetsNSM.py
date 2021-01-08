@@ -7,6 +7,7 @@ from PIL import Image
 import torch
 import torch.nn.functional as F
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
 from utils.augmentations import horisontal_flip
 from torch.utils.data import Dataset
@@ -64,7 +65,6 @@ class init_particle_counter(Feature):
         image.append({"nbr_particles":nbr_particles})
         
         return image
-
     
 class get_trajectory(Feature):
 
@@ -81,7 +81,6 @@ class get_trajectory(Feature):
         nbr_particles = image.properties[1]['nbr_particles']
         particle_index = nbr_particles + 1
         image.properties[1]['nbr_particles'] += 1
-        print("particle_index",particle_index)
         self.nbrParticles = particle_index
         
         length=image.shape[1]
@@ -220,18 +219,6 @@ class input_array(Feature):
         image=np.zeros((times,length,10))
         return image
 
-        
-
-
-
-
-
-
-
-
-        
-
-
 
 def pad_to_square(img, pad_value):
     c, h, w = img.shape
@@ -351,7 +338,7 @@ class ListDataset(Dataset):
         im=image.update().resolve()#(dX=dX,dA=dA,noise_lev=bgnoiselev,biglam=.3+.5*np.random.randn(),bgnoiseCval=bgnoiseCval,bgnoise=bgnoiselev,bigx0=0)
         v1 = self.unet.predict(np.expand_dims(im[...,0],axis=0))
         YOLOLabels = ConvertTrajToBoundingBoxes(im,length=length,times=times,treshold=0.5)
-              
+        plt.imshow(v1)
         v1 = np.sum(v1,1).T
         # Extract image as PyTorch tensor
         img = transforms.ToTensor()(v1)

@@ -64,7 +64,7 @@ if __name__ == "__main__":
             model.load_darknet_weights(opt.pretrained_weights)
 
     # Get dataloader
-    dataset = ListDataset(train_path, augment=True, multiscale=opt.multiscale_training,totalData = 1000)
+    dataset = ListDataset(train_path, augment=True, multiscale=opt.multiscale_training,totalData = 10)
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=opt.batch_size,
