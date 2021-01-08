@@ -1,5 +1,5 @@
 from __future__ import division
-# runfile('C:/Users/ccx55/Documents/GitHub/Pytorch-Yolo/detect.py',args='--model_def config/yolov3-customNSM.cfg --weights_path checkpoints/yolov3_ckpt_16.pth --class_path data/custom/classesNSM.names')
+# runfile('C:/Users/ccx55/OneDrive/Documents/GitHub/Pytorch-Yolo/detect.py',args='--model_def config/yolov3-customNSM.cfg --weights_path checkpoints/yolov3_ckpt_16.pth --class_path data/custom/classesNSM.names')
 from models import *
 from utils.utils import *
 from utils.datasetsNSM import *
@@ -104,7 +104,12 @@ if __name__ == "__main__":
         img = input_imgs[0,0,:,:] #Change first index here to allow different batch sizes, make for loop
         plt.figure()
         fig, ax = plt.subplots(1)
-        ax.imshow(img,aspect='auto')
+        try:
+            ax.imshow(img,aspect='auto')
+        except:
+            img= img.unsqueeze(0).cuda().deatch().cpu().clone().numpy()
+            ax.imshow(img,aspect='auto')
+            
         ax.set_xlim(192,320)
         detections = detections[0]
     

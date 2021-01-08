@@ -1,0 +1,12 @@
+**/.ipynb_checkpoints
+**/__pycache__
+deeptrack-app/*
+*/datasets/*
+*/models/*
+
+build/*
+dist/*
+*.egg-info/
+*/datasets/*
+*/theory
+_src/build/**/*

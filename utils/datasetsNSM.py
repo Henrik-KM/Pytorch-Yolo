@@ -6,300 +6,231 @@ import numpy as np
 from PIL import Image
 import torch
 import torch.nn.functional as F
+import tensorflow as tf
 
 from utils.augmentations import horisontal_flip
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
-def gen_noise(bgnoiselev,dA,vibamp,f2,x,times,length): #Generating simulated noise
-    bgnoiseCval=.03+.02*np.random.randn()
-    bgnoise=(.003+.005*np.random.rand())*np.random.randn(length)
-    #vibamp=dX#np.random.rand()*dX
-    biglam=np.random.rand()*.2+.6
-    bigx0=np.random.randn()*.2
-    tempcorr=3*np.random.rand()
-    dAmp=dA()#*np.random.rand()
-    shiftval=vibamp*np.random.randn()
-    dx=0
-    dx2=0
-    dAmp0=0
-    bg0=f2(1,bigx0,biglam,0,x)
-    noise=np.zeros((times,length))
-    for j in range(times):
-        dx=np.sqrt(1-np.exp(-2/tempcorr))*vibamp*np.random.randn()+np.exp(-1/tempcorr)*dx
-        dx2=np.sqrt(1-np.exp(-2/tempcorr))*vibamp*np.random.randn()+np.exp(-1/tempcorr)*dx2
 
-        bgnoiseC=f2(1,0,bgnoiseCval,dx2,x)
-        #bgnoiseC2=f2(1,0,bgnoiseCval,dx2+shiftval,x)
-        bgnoiseC/=np.sum(bgnoiseC)
-        bg=f2(1,bigx0+dx,biglam,0,x)+convolve(bgnoise,bgnoiseC,mode="same")
-        #bg2=f2(1,bigx0+dx2+shiftval,biglam,0,x)+convolve(bgnoise,bgnoiseC2,mode="same")
-        dAmp0=np.sqrt(1-np.exp(-2/tempcorr))*dAmp*np.random.randn()+np.exp(-1/tempcorr)*dAmp0
-        bg*=(1+dAmp0)
-        noise[j,:]=bg
-    return noise,bg0
-
-def gen_noise_experimental(bgin,dA,vibamp,times): #Generating noise from experimental data
-
-    bginflipped=np.flip(bgin)
-    bgin=np.append(2*bgin[0]-bginflipped,bgin)
-    bgin=np.append(bgin,2*bgin[-1]-bginflipped)
-    x=np.linspace(-3,3,512*3)
-    kx=2*np.pi/(3*(x[1]-x[0]))*x
-    fftv0=np.fft.fftshift(np.fft.fft(bgin))
-    dx=0
-    noise=np.zeros((times,3*512))+0j
-    shiftval=vibamp*np.random.randn()
-    dAmp=dA
-    dAmp0=0
-    tempcorr=3*np.random.rand()
-
-    for i in range(times):
-        dx=np.sqrt(1-np.exp(-2/tempcorr))*vibamp*np.random.randn()+np.exp(-1/tempcorr)*dx
-        fftv=fftv0*np.exp(1j*kx*dx)
-        dAmp0=np.sqrt(1-np.exp(-2/tempcorr))*dAmp*np.random.randn()+np.exp(-1/tempcorr)*dAmp0
-        fftv*=(1+dAmp0)
-        noise[i,:]=np.fft.fftshift(fftv)
-    noise=np.real(np.fft.ifft(noise,axis=-1))
-    noise=noise[:,512:1024]
-    return noise,np.mean(noise,axis=0)
+import deeptrack as dt
+from deeptrack.features import Feature
+import skimage.measure
 
 
-#Generate batches for training a network
-import numpy as np
+print_labels = False
 
-from scipy.special import j1
-import matplotlib.pyplot as plt
-from scipy.ndimage import rotate as imrotate
-from timeit import default_timer as timer
-from scipy.interpolate import RectBivariateSpline
-from scipy.signal import convolve, convolve2d
-import scipy.io as IO
-import skimage.measure as measure
-from scipy import stats
-import skimage
+length = 512
+L_reduction_factor = 4
+reduced_length = int(length/L_reduction_factor)
 
-def Generate8b8batchboxesv2Generator(bgnoiselev,Int=lambda: 1e-4,st=lambda:0.05,Ds=lambda: 0.05,
-                                     dA=0,dX=0,batchsize=8,length=512,times=64,bgexp=None,
-                                     print_labels=False, time_reduction=1, length_reduction=1,
-                                     downsampling_factor_for_length=1,nump=2):
-    x=np.linspace(-1,1,length)
-    t=np.linspace(-1,1,times)
-    t_red = time_reduction # downsampling in time direction
-    l_red = length_reduction # downsampling in length direction
-    t2=np.linspace(-1,1,times//t_red)
-    x2=np.linspace(-1,1,length//l_red)
-    G=lambda a,b,x0,s,x: a*np.exp(-(x-x0)**2/s**2)+b
-    f2=lambda a,x0,s,b,x: a*np.exp(-(x-x0)**2/s**2)+b
-    dx_real = 0.03
-    dt_real = 0.005
-    #Define number of particles in the simulation
-    v1 = np.zeros((batchsize,nump,times,length))
-
-    while True:
-        batch=np.zeros((batchsize,times,length,2))
-        label=np.zeros((batchsize,times//t_red,length//l_red,7))
+times = 512
+T_reduction_factor = 1
+reduced_times = int(times/T_reduction_factor)
 
 
-        ld=np.zeros((batchsize,2))
-        X, Y=np.meshgrid(np.linspace(-1,1,times),x)
-        X2, Y2=np.meshgrid(np.linspace(-1,1,times//t_red),x2)
-        Y2s=np.repeat(np.expand_dims(np.transpose(Y2),axis=-1),times,axis=-1)
-        X2s=np.repeat(np.expand_dims(np.transpose(X2),axis=-1),times,axis=-1)
+nump = lambda: np.clip(np.random.randint(5),0,2)
 
-        counts=np.zeros((batchsize,))
-        no=np.zeros((batchsize,))
-        vibamp=dX()
-        DList=np.zeros((batchsize,))
-        i=-1
-        while i< batchsize-1:
-            i+=1
-
-            #print(i)
-            counts=np.zeros((nump,))
-
-            x0=np.zeros((times,nump))
-            I=np.zeros((nump,))
-            D=np.zeros((nump,))
-            s0=np.zeros((nump,))
-            for ij in range(nump): #Give properties to each particle
-                I[ij]=Int()
-                D[ij]=Ds()
-                s0[ij]=st()
-                D_factor = 256**2/100*dx_real**2/dt_real/2/57
-                I_factor = s0[ij]*np.sqrt(np.pi)*256*dx_real                
-                I_max = 1.05e-3*0.88
-                D_max = 0.10*np.sqrt(1.05)
-                if print_labels:
-                    print("Input I (%): {}".format(I[ij]/I_max))
-                    print("Input D (%): {}".format(D[ij]/D_max))
-                #print("Input I: {}".format(I[ij]*I_factor*2000))
-                #print("Input D: {}".format((D[ij]*10)**2*D_factor))
-            vel=10*(np.random.rand(nump)-.5)/length #Average velocities of the particles
-
-            t0=(1.1*np.random.rand(nump)-.1)*times #Time point at which particle reaches x=-1
-            x0[0,:]=-vel*t0-1 #Starting point of particle
-            x0[0,:]=-1+2*np.random.rand(nump)
-            #for ij in range(nump):
-            # ld[i,0]=10*D[ij]
-            # ld[i,1]=.2*I[ij]*s0[ij]**2/.05**2 #Make a list of "ground truth" values
-            #Initialize stuff...
-            dists=np.zeros((*label.shape[1:-1],nump))
-            vels=np.zeros((*label.shape[1:-1],nump))
-            DList[i]=10*D[0]
-            diffs=np.zeros((*label.shape[1:-1],nump))
-            ints=np.zeros((*label.shape[1:-1],nump))
-            v2=np.zeros((*label.shape[1:-1],nump))
-            xline=np.zeros(x0.shape)
-            slope=np.zeros((nump,))
-            inter=np.zeros((nump,))
-            maxdist=np.zeros((nump,))
-            mx=np.zeros((*label.shape[1:-1],nump))
-            cs=np.zeros((*label.shape[1:-1],nump))
-            dx=0
-            dx2=0
+Int = lambda : 1e-3*(0.4+0.45*np.random.rand())
+Ds = lambda: 0.10*np.sqrt((0.05 + 2*np.random.rand()))
+st = lambda: 0.04 + 0.01*np.random.rand()
 
 
-            if i%16==0:
-                if bgexp is not None:
-                    bg,bg0=gen_noise_experimental(bgexp,dA,vibamp,times)#Generate experimental noise, based on input noise profile bgexp
-                else:
-                    bg,bg0=gen_noise(bgnoiselev, dA,vibamp,f2,x,times,length) #Generate simulated noise
-                batch[i,:,:,1]=bg
+class get_diffusion(Feature):
+    
+    def __init__(self, vel=0, D=0, I=0, s=0, **kwargs):
+        super().__init__(
+            vel=vel, D=D, I=I,s=s, **kwargs
+        )
 
-            else:
-                bg=batch[i-1,:,:,1]
-                batch[i,:,:,1]=bg
-            bg=batch[i,:,:,1]
-
-            value=bg
-            tmp=np.zeros(label.shape[1:-1])
-            for k in range(nump):
-
-                x0[:,k]=x0[0,k]+np.cumsum(vel[k]+D[k]*np.random.randn(times)) #Simulate a Brownian particle
-                inds=np.where(np.abs(x0[:,k])<1)[0] #Find where the particle is inside channel
-                print(inds.shape)
-
-
-                if len(inds)>2:
-                    sl, intercept, r_value, p_value, std_err = stats.linregress(t[inds],x0[inds,k])#Line regress over particle positions inside channel
-                    counts[k]=len(inds)
-                else:
-                    sl, intercept, r_value, p_value, std_err = stats.linregress(t,x0[:,k])#If inside only a single or two pixels, make a line regress over entire trajectory (will not matter anyway)
-                    counts[k]=1
-                    
-                # Store slope, intercept and the fitted line for each particle
-                slope[k]=sl#
-                inter[k]=intercept
-                xline[:,k]=slope[k]*t+intercept
-
-                if len(inds)>2:
-                    maxdist[k]=np.amax(np.abs(x0[inds,k]-xline[inds,k]))#Find max excursion from line
-
-                value=value*np.transpose(f2(-I[k],x0[:,k],s0[k],1,Y)) #Add particle to noise image
-
-                # Make profile for labels
-                v1[i,k,:,:] = np.transpose(f2(1,x0[:,k],.1,0,Y))
-                v2[:,:,k]=skimage.measure.block_reduce(v1[i,k,:,:], (t_red,l_red), np.max)
-                blobs_labels = measure.label((v2[:,:,k]>.3).astype('float32'), background=0) #Segment the segmented image into separate connected components (If the same particle moves in and out of the channel multiple times, this should be split into several particles)
-
-                for kj in range(1,1+np.amax(blobs_labels)):
-                    inds=np.where(blobs_labels==kj)
-                    bg=np.zeros(blobs_labels.shape)
-                    bg[inds[0],inds[1]]=1
-                    tmp[inds[0],inds[1]]=1
-                    cs[:,:,k]+=bg/np.sum(bg+1e-7) #Particle count channel
-
-                dis=np.sqrt((Y2s-xline[:,k])**2+(X2s-t)**2)
-
-                dists[:,:,k]=np.amin(dis,axis=-1) #Find distance to line from each pixel
-                mx[:,:,k]=np.argmin(dis,axis=-1)
-                vels[:,:,k]=3*vel[k]
-                diffs[:,:,k]=(10*D[k])**2*256**2/100*dx_real**2/dt_real/2
-                ints[:,:,k]=I[k]*s0[k]*np.sqrt(np.pi)*256*dx_real # *dx
-#                 if print_labels:
-#                     print("I(input): {}".format(diffs[0,0,0]))
-#                     print("D(input): {}".format(ints[0,0,0]))
-
-            label[i,:,:,2]=tmp#Assign segmentation channel
-            dist2=np.argmin(np.abs(dists),axis=-1) #Find which particle is closest to each pixel
-            for kl in range(label.shape[1]):
-                for mn in range(label.shape[2]):
-                    #Assign properties of correct particle to each pixel
-                    label[i,kl,mn,0]=diffs[kl,mn,dist2[kl,mn]]*label[i,kl,mn,2]
-                    label[i,kl,mn,1]=ints[kl,mn,dist2[kl,mn]]*label[i,kl,mn,2]
-                    ti=t2[kl]
-                    xi=slope[dist2[kl,mn]]*ti+inter[dist2[kl,mn]]
-                    dx=x2[mn]-xi
-                    label[i,kl,mn,3]=dx*label[i,kl,mn,2]
-                    label[i,kl,mn,4]=slope[dist2[kl,mn]]*label[i,kl,mn,2]/10
-                    label[i,kl,mn,5]=maxdist[dist2[kl,mn]]*label[i,kl,mn,2]
-
-            value*=(1+bgnoiselev()*np.random.randn(times,length))# Add white noise to image
-            label[i,:,:,6]=np.sum(cs,axis=-1) # Assign particle count channel
-            batch[i,:,:,0]=value
-
-
-            batch[i,:,:,0]/=bg0#Normalize image by the bare signal
-            batch[i,:,:,0]-=np.expand_dims(np.mean(batch[i,:,:,0],axis=0),axis=0)#Subtract mean over image
-
-            # Perform same preprocessing as done on experimental images
-            ono=np.ones((200,1))
-            ono[0:80]=1
-            ono[120:]=1
-            ono=ono/np.sum(ono)
-            ono2=np.ones((1,50))
-            ono2/=np.sum(ono2)
-            batch[i,:,:,0]-=convolve2d(batch[i,:,:,0],ono,mode="same")
-            batch[i,:,:,0]-=convolve2d(batch[i,:,:,0],np.transpose(ono),mode="same")
-
-            # Normalize by standard deviation of noise
-            a=np.expand_dims(np.std(batch[i,:,:,0],axis=1),axis=1)
-            no[i]=np.mean(a)
-            
-            batch[i,:,:,0]-=np.expand_dims(np.mean(batch[i,:,:,0],axis=0),axis=0)
-            batch[i,:,:,0]*=1000 # *1000 sets input in ca (0,1)-range
-
-            label[i,:,:,0]*=1/57 # set D in (0,1)-range         
-            label[i,:,:,1]*=2000 # set I in (0,1)-range    
-            
-            ld[i,1]=np.sum(label[i,:,:,1]*label[i,:,:,2])/(1e-3+np.sum(label[i,:,:,2]))
-            ld[i,0]=np.sum(label[i,:,:,0]*label[i,:,:,2])/(1e-3+np.sum(label[i,:,:,2]))
-            
-            if print_labels:
-                print('I-label: (true_value){}'.format(ld[i,1]/2000))
-                print('D-label (true_value): {}'.format(ld[i,0]*57))
-                print()
-
-        # Downsample simulated image
-        DFL = downsampling_factor_for_length
-        batch=skimage.measure.block_reduce(batch, (1,1,DFL,1), np.mean)
-
-
-        yield batch[...,:1],[ld[:,:2],label[...,:3]],v1#, DList, counts/(label.shape[1]*label.shape[2])*40, no
+    def get(self, image, vel, D, I,s, **kwargs):
+        LOW = 0.01
+        HIGH = 1.5
+        D = (LOW + HIGH*np.random.rand())
+        image.append({"D":D})
         
-def ConvertTrajToBoundingBoxes(v1,batchSize,nump,length=512,times=128,treshold=0.5):
-    YOLOLabels = np.zeros((batchSize,nump,5)) # Each label has 5 components - image type,x1,x2,y1,y2
-    #Labels are ordered as follows: LabelID X_CENTER_NORM Y_CENTER_NORM WIDTH_NORM HEIGHT_NORM, where 
-    #X_CENTER_NORM = X_CENTER_ABS/IMAGE_WIDTH
-    #Y_CENTER_NORM = Y_CENTER_ABS/IMAGE_HEIGHT
-    #WIDTH_NORM = WIDTH_OF_LABEL_ABS/IMAGE_WIDTH
-    #HEIGHT_NORM = HEIGHT_OF_LABEL_ABS/IMAGE_HEIGHT
-    try:
-        for j in range(0,batchSize):
-            for k in range(0,nump):
-                p = v1[j,k,...]
-                particleOccurence = np.where(p>treshold)
-                if not np.size(particleOccurence)  == 0:
-                    x1,x2 = particleOccurence[0][0],particleOccurence[0][-1]
-                    y1,y2 = np.min(particleOccurence[1]),np.max(particleOccurence[1])
-                    
-                    YOLOLabels[j,k,:] = 0, np.abs(x2+x1)/2/(times-1), (y2+y1)/2/(length-1),(x2-x1)/(times-1),(y2-y1)/(length-1)
-                else:
-                    YOLOLabels = np.delete(YOLOLabels,[j,k],1)
-    except:
-        print("Label generation failed. Continuing..")
+        return image
+    
+class init_particle_counter(Feature):
+    
+    def __init__(self, vel=0, D=0, I=0, s=0, **kwargs):
+        super().__init__(
+            vel=vel, D=D, I=I,s=s, **kwargs
+        )
 
-    return YOLOLabels
+    def get(self, image, vel, D, I,s, **kwargs):
+        
+        # Init particle counter
+        nbr_particles = 0
+        image.append({"nbr_particles":nbr_particles})
+        
+        return image
+
+    
+class get_trajectory(Feature):
+
+    
+    def __init__(self, vel=0, D=0.1, I=0.1,s=0.05, **kwargs):
+        super().__init__(
+            vel=vel, D=D, I=I,s=s, nbr_particles=0, **kwargs
+        )
+        self.nbrParticles = 0
+
+    def get(self, image, vel, D, I, s, **kwargs):
+        
+        # Particle counter
+        nbr_particles = image.properties[1]['nbr_particles']
+        particle_index = nbr_particles + 1
+        image.properties[1]['nbr_particles'] += 1
+        print("particle_index",particle_index)
+        self.nbrParticles = particle_index
+        
+        length=image.shape[1]
+        times=image.shape[0]
+        x=np.linspace(-1,1,length)
+        t=np.linspace(-1,1,times)
+        X, Y=np.meshgrid(t,x)
+        G= lambda a,b,x0,s,x: a*np.exp(-(x-x0)**2/s**2)+b
+        f2=lambda a,x0,s,b,x: a*np.exp(-(x-x0)**2/s**2)+b
+        x0=0
+        x0+=np.cumsum(vel+D*np.random.randn(times))
+        v1=np.transpose(I*f2(1,x0,s,0,Y))
+        image[...,0]*=(1-v1)
+        
+        particle_trajectory = np.transpose(f2(1,x0,0.05,0,Y))
+        
+        # Add trajectory to full image
+        image[...,1] += particle_trajectory 
+        
+        # Save single trajectory as additional image
+        image[...,-particle_index] = particle_trajectory      
+        
+        
+        #image[...,2]+=np.transpose(I*f2(1,x0,s,0,Y))
+        
+        
+        try:
+            image.properties["D"]+=10*D#*np.sum(np.transpose(f2(1,x0,.1,0,Y)))
+            image.properties["I"]+=s*I*np.sqrt(2*np.pi)*256*.03*1000
+        except:
+            image.append({"D":10*D,"I":s*I*np.sqrt(2*np.pi)*256*.03*1000})
+        #print("D:",10*D)
+        #print("I:",I)
+            
+        #imaged_sample[...,0]=v1
+        #imaged_sample.properties=self.properties
+        return image
+    
+class gen_noise(Feature):
+    
+    
+    def __init__(self, noise_lev=0, dX=0, dA=0,biglam=0,bgnoiseCval=0,bgnoise=0,bigx0=0, **kwargs):
+        super().__init__(
+            noise_lev=noise_lev, dX=dX, dA=dA,biglam=biglam,bgnoiseCval=bgnoiseCval,bgnoise=bgnoise,bigx0=bigx0, **kwargs
+        )
+
+    def get(self, image, noise_lev, dX, dA,biglam,bgnoiseCval,bgnoise,bigx0, **kwargs):
+        #image=np.zeros((256,512,2))
+        from scipy.signal import convolve
+        
+        length=image.shape[1]
+        times=image.shape[0]
+        x=np.linspace(-1,1,length)
+        t=np.linspace(-1,1,times)
+        X, Y=np.meshgrid(t,x)
+        G= lambda a,b,x0,s,x: a*np.exp(-(x-x0)**2/s**2)+b
+        f2=lambda a,x0,s,b,x: a*np.exp(-(x-x0)**2/s**2)+b
+        bgnoise*=np.random.randn(length)
+
+        tempcorr=3*np.random.rand()
+        dAmp=dA#*np.random.rand()
+        shiftval=dX*np.random.randn()
+        dx=0
+        dx2=0
+        dAmp0=0
+        bg0=f2(1,bigx0,biglam,0,x)
+        ll=(np.pi-.05)
+        for j in range(times):
+            #dx=np.sqrt(1-np.exp(-2/tempcorr))*dX*np.random.randn()+np.exp(-1/tempcorr)*dx
+            #dx2=np.sqrt(1-np.exp(-2/tempcorr))*dX*np.random.randn()+np.exp(-1/tempcorr)*dx2
+            dx=(.7*np.random.randn()+np.sin(ll*j))*dX
+            
+            bgnoiseC=f2(1,0,bgnoiseCval,dx,x)
+            #bgnoiseC2=f2(1,0,bgnoiseCval,dx2+shiftval,x)
+            bgnoiseC/=np.sum(bgnoiseC)
+            bg=f2(1,bigx0+dx,biglam,0,x)*(1+convolve(bgnoise,bgnoiseC,mode="same"))
+            #bg2=f2(1,bigx0+dx2+shiftval,biglam,0,x)+convolve(bgnoise,bgnoiseC2,mode="same")
+            #dAmp0=np.sqrt(1-np.exp(-2/tempcorr))*dAmp*np.random.randn()+np.exp(-1/tempcorr)*dAmp0
+            dAmp0=dA*np.random.randn()
+            bg*=(1+dAmp0)
+            image[j,:,0]=bg*(1+noise_lev*np.random.randn(length))+.4*noise_lev*np.random.randn(length)
+        return image
+
+class post_process(Feature):
+    
+    
+    def __init__(self, noise_lev=0, dX=0, dA=0, **kwargs):
+        super().__init__(
+            noise_lev=noise_lev, dX=dX, dA=dA, **kwargs
+        )
+
+    def get(self, image, **kwargs):
+        from scipy.signal import convolve2d
+        length=image.shape[1]
+        times=image.shape[0]
+        x=np.linspace(-1,1,length)
+        t=np.linspace(-1,1,times)
+        X, Y=np.meshgrid(t,x)
+        G= lambda a,b,x0,s,x: a*np.exp(-(x-x0)**2/s**2)+b
+        f2=lambda a,x0,s,b,x: a*np.exp(-(x-x0)**2/s**2)+b
+        
+        image[:,:,0]/=np.mean(image[...,0],axis=0)#Normalize image by the bare signal
+        
+        image[:,:,0]-=np.expand_dims(np.mean(image[:,:,0],axis=0),axis=0)#Subtract mean over image
+
+        #Perform same preprocessing as done on experimental images
+        ono=np.ones((200,1))
+        ono[0:80]=1
+        ono[120:]=1
+        ono=ono/np.sum(ono)
+        ono2=np.ones((1,50))
+        ono2/=np.sum(ono2)
+        image[:,:,0]-=convolve2d(image[:,:,0],ono,mode="same")
+        image[:,:,0]-=convolve2d(image[:,:,0],np.transpose(ono),mode="same")
+        
+        
+        
+        image[:,:,0]-=np.expand_dims(np.mean(image[:,:,0],axis=0),axis=0)
+        a=np.std(image[...,0],axis=0)
+        image[:,:,0]/=a
+        try:
+            image.properties["I"]/=a
+        except:
+            pass
+        #image[...,2]/=a
+        #image=np.flip(image,axis=-1)
+        
+        
+        
+        return image
+
+    
+class input_array(Feature):
+    __distributed__ = False
+    def get(self,image, **kwargs):
+        image=np.zeros((times,length,10))
+        return image
+
+        
+
+
+
+
+
+
+
+
+        
+
 
 
 def pad_to_square(img, pad_value):
@@ -364,58 +295,63 @@ class ListDataset(Dataset):
         self.max_size = self.img_size + 3 * 32
         self.batch_count = 0
         self.totalData = totalData
+        self.unet = tf.keras.models.load_model('../input/network-weights/unet-1-dec-1415.h5',compile=False)
 
     def __getitem__(self, index):
 
         # ---------
         #  Image
         # ---------
-        print_labels = False
         
-        batchSize = 1
-        Int = lambda: 1.05e-3*(0.08+0.8*np.random.rand())
-        Ds = lambda: 0.10*np.sqrt((0.05 + 1.0*np.random.rand()))
-        st = lambda: 0.04 + 0.01*np.random.rand()
+        def ConvertTrajToBoundingBoxes(im,length=512,times=128,treshold=0.5):
+            YOLOLabels = [] # Each label has 5 components - image type,x1,x2,y1,y2
+            #Labels are ordered as follows: LabelID X_CENTER_NORM Y_CENTER_NORM WIDTH_NORM HEIGHT_NORM, where 
+            #X_CENTER_NORM = X_CENTER_ABS/IMAGE_WIDTH
+            #Y_CENTER_NORM = Y_CENTER_ABS/IMAGE_HEIGHT
+            #WIDTH_NORM = WIDTH_OF_LABEL_ABS/IMAGE_WIDTH
+            #HEIGHT_NORM = HEIGHT_OF_LABEL_ABS/IMAGE_HEIGHT
+            try:
+                nump = 0
+                while True:
+                    particle_img = im[...,-nump-1]
+                    particleOccurence = np.where(particle_img>treshold)
+                    if np.sum(particleOccurence) <= 0:
+                        break
         
-    
-        length = 512
-        times = 128
+                    x1,x2 = particleOccurence[1][0],particleOccurence[1][-1]
+                    y1,y2 = np.min(particleOccurence[0]),np.max(particleOccurence[0])  
+                    if YOLOLabels == []:
+                        YOLOLabels = np.array([0, np.abs(x2+x1)/2/(times-1), (y2+y1)/2/(length-1),(x2-x1)/(times-1),(y2-y1)/(length-1)]).reshape(1,-1)
+                    else:
+                        YOLOLabels = np.append(YOLOLabels, np.array([0, np.abs(x2+x1)/2/(times-1), (y2+y1)/2/(length-1),(x2-x1)/(times-1),(y2-y1)/(length-1)]).reshape(1,-1),0)                            
+                    nump+=1
+            except:
+                   print("Label generation failed. Continuing..")
+            
         
-        dA = lambda: 0.00006 * (0.7 + np.random.rand())
-        dX = lambda: 0.00006* (0.7 + np.random.rand())
-        bgnoiselev = lambda: 0.0006* (0.7 + np.random.rand())
-    
-        time_reduction = 16
-        length_reduction = 64
-        downsampling_factor_for_length = 1
-        nump=2 #number of particles
-        data_generator = Generate8b8batchboxesv2Generator(bgnoiselev=bgnoiselev,
-                                                         Int=Int,
-                                                         st=st,
-                                                         Ds=Ds, 
-                                                         dA=dA,
-                                                         dX=dX,
-                                                         batchsize=batchSize,
-                                                         length=length,
-                                                         times=times,
-                                                         bgexp=None,
-                                                         print_labels=print_labels,
-                                                         time_reduction=time_reduction,
-                                                         length_reduction=length_reduction,
-                                                         downsampling_factor_for_length=downsampling_factor_for_length,
-                                                         nump=nump)
-        val,valL,v1 = next(data_generator)
+            return YOLOLabels
         
-        # For training on iOC = 5e-4, D = [10,20,50] mu m^2/s
-        # Range on Ds: 0.03 -> 0.08
-        # Range on Is: 5e-3 = good contrast
+
+        image=dt.FlipLR(dt.FlipUD(input_array()+ init_particle_counter() +
+                                                          gen_noise(dX=.00001+.00003*np.random.rand(),
+                                                          dA=0,
+                                                          noise_lev=.0001,
+                                                          #noise_lev = 0.0001*(0.75+0.75*np.random.rand()),
+                                                          biglam=0.6+.4*np.random.rand(),
+                                                          bgnoiseCval=0.03+.02*np.random.rand(),
+                                                          #bgnoiseCval=0.03+.05*np.random.rand(),
+                                                          #bgnoise=.08+.14*np.random.rand(),
+                                                          bgnoise=.08+.04*np.random.rand(),
+                                                          bigx0=lambda: .1*np.random.randn())
+                                  +get_trajectory(D=Ds, I=Int,s=st,)**nump+post_process()))
         
-        # Plot predictions of validation samples
-        val=val[...,:1]
-        valld = valL[0]
+        #b,L = generate_training_batch(image,batch_size)
         
-        YOLOLabels=ConvertTrajToBoundingBoxes(v1,batchSize,nump,length=512,times=128,treshold=0.5)
-       # v1 = np.sum(v1[0,...],0).T #Place all particles in the same image
+        
+        im=image.update().resolve()#(dX=dX,dA=dA,noise_lev=bgnoiselev,biglam=.3+.5*np.random.randn(),bgnoiseCval=bgnoiseCval,bgnoise=bgnoiselev,bigx0=0)
+        v1 = self.unet.predict(np.expand_dims(im[...,0],axis=0))
+        YOLOLabels = ConvertTrajToBoundingBoxes(im,length=length,times=times,treshold=0.5)
+              
         v1 = np.sum(v1,1).T
         # Extract image as PyTorch tensor
         img = transforms.ToTensor()(v1)
