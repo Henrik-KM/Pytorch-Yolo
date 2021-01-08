@@ -295,7 +295,7 @@ class ListDataset(Dataset):
         self.max_size = self.img_size + 3 * 32
         self.batch_count = 0
         self.totalData = totalData
-        self.unet = tf.keras.models.load_model('../input/network-weights/unet-1-dec-1415.h5',compile=False)
+        self.unet = tf.keras.models.load_model('../../input/network-weights/unet-1-dec-1415.h5',compile=False)
 
     def __getitem__(self, index):
 
