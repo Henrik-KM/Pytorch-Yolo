@@ -17,7 +17,7 @@ import deeptrack as dt
 from deeptrack.features import Feature
 import skimage.measure
 
-
+unet=tf.keras.models.load_model('../../input/network-weights/unet-1-dec-1415.h5',compile=False)
 print_labels = False
 
 length = 512
@@ -282,7 +282,6 @@ class ListDataset(Dataset):
         self.max_size = self.img_size + 3 * 32
         self.batch_count = 0
         self.totalData = totalData
-        self.unet = tf.keras.models.load_model('../../input/network-weights/unet-1-dec-1415.h5',compile=False)
 
     def __getitem__(self, index):
 
@@ -336,9 +335,9 @@ class ListDataset(Dataset):
         
         
         im=image.update().resolve()#(dX=dX,dA=dA,noise_lev=bgnoiselev,biglam=.3+.5*np.random.randn(),bgnoiseCval=bgnoiseCval,bgnoise=bgnoiselev,bigx0=0)
-        v1 = self.unet.predict(np.expand_dims(im[...,0],axis=0))
+        v1 = unet.predict(np.expand_dims(im[...,0],axis=0))
         YOLOLabels = ConvertTrajToBoundingBoxes(im,length=length,times=times,treshold=0.5)
-        plt.imshow(v1)
+        plt.imshow(v1,aspect='auto')
         v1 = np.sum(v1,1).T
         # Extract image as PyTorch tensor
         img = transforms.ToTensor()(v1)
