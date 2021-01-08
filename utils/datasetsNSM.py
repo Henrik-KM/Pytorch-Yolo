@@ -299,6 +299,7 @@ class ListDataset(Dataset):
             try:
                 nump = 0
                 while True:
+                    print(str(nump))
                     particle_img = im[...,-nump-1]
                     particleOccurence = np.where(particle_img>treshold)
                     if np.sum(particleOccurence) <= 0:
