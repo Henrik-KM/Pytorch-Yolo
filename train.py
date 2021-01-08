@@ -64,6 +64,7 @@ if __name__ == "__main__":
             model.load_darknet_weights(opt.pretrained_weights)
 
     # Get dataloader
+    print("getting dataloder")
     dataset = ListDataset(train_path, augment=True, multiscale=opt.multiscale_training,totalData = 10)
     dataloader = torch.utils.data.DataLoader(
         dataset,
@@ -93,7 +94,7 @@ if __name__ == "__main__":
         "conf_noobj",
     ]
 
-
+    print("starting training")
     for epoch in range(opt.epochs):
         model.train()
         start_time = time.time()
