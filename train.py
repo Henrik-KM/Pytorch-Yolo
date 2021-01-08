@@ -4,6 +4,7 @@ from utils.logger import *
 from utils.utils import *
 from utils.datasetsNSM import *
 from utils.parse_config import *
+from models import Darknet
 import test
 
 from terminaltables import AsciiTable
