@@ -1,6 +1,5 @@
 from __future__ import division
-# runfile('C:/Users/ccx55/Documents/GitHub/Pytorch-Yolo/train.py',args='--data_config config/custom.data --n_cpu 0')
-from models import *
+# runfile('C:/Users/ccx55/OneDrive/Documents/GitHub/Pytorch-Yolo/train.py',args='--data_config config/customNSM.data --model_def config/yolov3-customNSM.cfg --n_cpu 0')from models import *
 from utils.logger import *
 from utils.utils import *
 from utils.datasetsNSM import *
