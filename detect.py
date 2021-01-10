@@ -106,9 +106,8 @@ if __name__ == "__main__":
         fig, ax = plt.subplots(1)
         try:
             ax.imshow(img,aspect='auto')
-        except:
-            img= img.unsqueeze(0).cuda().deatch().cpu().clone().numpy()
-            ax.imshow(img,aspect='auto')
+        except:           
+            ax.imshow(img.unsqueeze(0).cuda().numpy(),aspect='auto')
             
         ax.set_xlim(192,320)
         detections = detections[0]
