@@ -7,7 +7,11 @@ from PIL import Image
 import torch
 import torch.nn.functional as F
 import tensorflow as tf
+config = tf.compat.v1.ConfigProto() #Use to fix OOM problems with unet
+config.gpu_options.allow_growth = True
+session = tf.compat.v1.Session(config=config)
 import matplotlib.pyplot as plt
+from tensorflow.keras import backend as K
 
 from utils.augmentations import horisontal_flip
 from torch.utils.data import Dataset
@@ -20,11 +24,11 @@ import skimage.measure
 unet=tf.keras.models.load_model('../../input/network-weights/unet-1-dec-1415.h5',compile=False)
 print_labels = False
 
-length = 256
+length = 128
 L_reduction_factor = 1
 reduced_length = int(length/L_reduction_factor)
 
-times = 256
+times = 128
 T_reduction_factor = 1
 reduced_times = int(times/T_reduction_factor)
 
@@ -282,6 +286,8 @@ class ListDataset(Dataset):
         self.max_size = self.img_size + 3 * 32
         self.batch_count = 0
         self.totalData = totalData
+        self.v1 = []
+        self.im = []
 
     def __getitem__(self, index):
 
@@ -305,8 +311,8 @@ class ListDataset(Dataset):
                     if np.sum(particleOccurence) <= 0:
                         break
         
-                    x1,x2 = particleOccurence[1][0],particleOccurence[1][-1]
-                    y1,y2 = np.min(particleOccurence[0]),np.max(particleOccurence[0])  
+                    x1,x2 = particleOccurence[0][0],particleOccurence[0][-1]
+                    y1,y2 = np.min(particleOccurence[1]),np.max(particleOccurence[1])  
                     if YOLOLabels == []:
                         YOLOLabels = np.array([0, np.abs(x2+x1)/2/(times-1), (y2+y1)/2/(length-1),(x2-x1)/(times-1),(y2-y1)/(length-1)]).reshape(1,-1)
                     else:
@@ -316,7 +322,7 @@ class ListDataset(Dataset):
                    print("Label generation failed. Continuing..")
             
         
-            return YOLOLabels
+            return np.array(YOLOLabels)
         
 
         image=dt.FlipLR(dt.FlipUD(input_array()+ init_particle_counter() +
@@ -336,17 +342,24 @@ class ListDataset(Dataset):
         
         print("creating image")
         im=image.update().resolve()#(dX=dX,dA=dA,noise_lev=bgnoiselev,biglam=.3+.5*np.random.randn(),bgnoiseCval=bgnoiseCval,bgnoise=bgnoiselev,bigx0=0)
-        print("predicting with GAN")
+        print("predicting with GAN")      
+        self.im = im
         v1 = unet.predict(np.expand_dims(im[...,0],axis=0))
+        K.clear_session()
         #v1 = im[...,0]
         print("creating labels")
         YOLOLabels = ConvertTrajToBoundingBoxes(im,length=length,times=times,treshold=0.5)
+        plt.figure(1)
+        plt.imshow(im[...,0].T,aspect='auto')
+        plt.figure(2)
         plt.imshow(np.squeeze(v1).T,aspect='auto')
-        v1 = np.sum(v1,1).T
+        print("v1 shape 1: "+str(v1.shape))
+        #v1 = np.sum(v1,1).T
+        v1 = v1[0,:,:,:]
         # Extract image as PyTorch tensor
         img = transforms.ToTensor()(v1)
         img = torch.cat(3*[img]) # Convert to 3-channel image to simulate RGB information
-
+        print("img shape: "+str(img.shape))
         # Handle images with less than three channels ## defunct? 
         if len(img.shape) != 3:
             img = img.unsqueeze(0)
@@ -360,26 +373,29 @@ class ListDataset(Dataset):
         # ---------
         #  Label
         # ---------
-        targets = None       
-        boxes = torch.from_numpy(YOLOLabels).reshape(-1,5)#torch.from_numpy(np.loadtxt(label_path).reshape(-1, 5))
-        # Extract coordinates for unpadded + unscaled image
-        x1 = w_factor * (boxes[:, 1] - boxes[:, 3] / 2)
-        y1 = h_factor * (boxes[:, 2] - boxes[:, 4] / 2)
-        x2 = w_factor * (boxes[:, 1] + boxes[:, 3] / 2)
-        y2 = h_factor * (boxes[:, 2] + boxes[:, 4] / 2)
-        # Adjust for added padding
-        x1 += pad[0]
-        y1 += pad[2]
-        x2 += pad[1]
-        y2 += pad[3]
-        # Returns (x, y, w, h)
-        boxes[:, 1] = ((x1 + x2) / 2) / padded_w
-        boxes[:, 2] = ((y1 + y2) / 2) / padded_h
-        boxes[:, 3] *= w_factor / padded_w
-        boxes[:, 4] *= h_factor / padded_h
-        targets = torch.zeros((len(boxes), 6))
-        targets[:, 1:] = boxes
+        targets = None   
+        if len(YOLOLabels) > 0:
+            boxes = torch.from_numpy(YOLOLabels).reshape(-1,5)#torch.from_numpy(np.loadtxt(label_path).reshape(-1, 5))
+            # Extract coordinates for unpadded + unscaled image
+            x1 = w_factor * (boxes[:, 1] - boxes[:, 3] / 2)
+            y1 = h_factor * (boxes[:, 2] - boxes[:, 4] / 2)
+            x2 = w_factor * (boxes[:, 1] + boxes[:, 3] / 2)
+            y2 = h_factor * (boxes[:, 2] + boxes[:, 4] / 2)
+            # Adjust for added padding
+            x1 += pad[0]
+            y1 += pad[2]
+            x2 += pad[1]
+            y2 += pad[3]
+            # Returns (x, y, w, h)
+            boxes[:, 1] = ((x1 + x2) / 2) / padded_w
+            boxes[:, 2] = ((y1 + y2) / 2) / padded_h
+            boxes[:, 3] *= w_factor / padded_w
+            boxes[:, 4] *= h_factor / padded_h
+            targets = torch.zeros((len(boxes), 6))
+            targets[:, 1:] = boxes
+        self.v1 = targets
 
+        print("img shape 2: "+str(img.shape))
         return "", img, targets
 
     def collate_fn(self, batch):

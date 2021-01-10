@@ -1,10 +1,10 @@
 from __future__ import division
-# runfile('C:/Users/ccx55/OneDrive/Documents/GitHub/Pytorch-Yolo/train.py',args='--data_config config/customNSM.data --model_def config/yolov3-customNSM.cfg --n_cpu 0')from models import *
+# runfile('C:/Users/ccx55/OneDrive/Documents/GitHub/Pytorch-Yolo/train.py',args='--data_config config/customNSM.data --model_def config/yolov3-customNSM.cfg --n_cpu 0 --batch_size=1')
+from models import *
 from utils.logger import *
 from utils.utils import *
 from utils.datasetsNSM import *
 from utils.parse_config import *
-from models import Darknet
 import test
 
 from terminaltables import AsciiTable
@@ -14,6 +14,7 @@ import sys
 import time
 import datetime
 import argparse
+import numpy as np
 
 import torch
 from torch.utils.data import DataLoader
@@ -64,7 +65,6 @@ if __name__ == "__main__":
             model.load_darknet_weights(opt.pretrained_weights)
 
     # Get dataloader
-    print("getting dataloder")
     dataset = ListDataset(train_path, augment=True, multiscale=opt.multiscale_training,totalData = 10)
     dataloader = torch.utils.data.DataLoader(
         dataset,
@@ -94,7 +94,6 @@ if __name__ == "__main__":
         "conf_noobj",
     ]
 
-    print("starting training")
     for epoch in range(opt.epochs):
         model.train()
         start_time = time.time()
@@ -104,10 +103,19 @@ if __name__ == "__main__":
             if len(imgs) == opt.batch_size:
                 imgs = torch.stack(imgs)
                 
-            imgs = Variable(imgs.to(device))
+            try:
+                imgs = Variable(imgs.to(device))
+            except:
+                imgs = torch.stack(imgs)
+                imgs = Variable(imgs.to(device))
+                
             targets = Variable(targets.to(device), requires_grad=False)
 
             model=model.float()
+            try:
+                print(np.min(np.array(targets.cpu())))
+            except:
+                print("None")
             loss, outputs = model(imgs, targets)
             loss.backward()
 
@@ -155,15 +163,59 @@ if __name__ == "__main__":
 
         if epoch % opt.evaluation_interval == 0:
             print("\n---- Evaluating Model ----")
+            
+            
+            def evaluate(model, path, iou_thres, conf_thres, nms_thres, img_size, batch_size):
+                model.eval()
+            
+                # Get dataloader
+                print("preparing dataset")
+                dataset = ListDataset(path, img_size=img_size, augment=False, multiscale=False,totalData=10)
+                dataloader = torch.utils.data.DataLoader(
+                    dataset, batch_size=batch_size, shuffle=False, num_workers=1, collate_fn=dataset.collate_fn
+                )
+            
+                Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
+            
+                labels = []
+                sample_metrics = []  # List of tuples (TP, confs, pred)
+                for batch_i, (_, imgs, targets) in enumerate(tqdm.tqdm(dataloader, desc="Detecting objects")):
+                    print("iteration"+str(batch_i))
+                    # Extract labels
+                    labels += targets[:, 1].tolist()
+                    # Rescale target
+                    targets[:, 2:] = xywh2xyxy(targets[:, 2:])
+                    targets[:, 2:] *= img_size
+            
+                    if len(imgs) == batch_size:
+                        imgs = torch.stack(imgs)
+                    try:
+                        imgs = Variable(imgs.type(Tensor), requires_grad=False)
+                    except:
+                        imgs = torch.stack(imgs)
+                        imgs = Variable(imgs.type(Tensor), requires_grad=False)
+            
+                    with torch.no_grad():
+                        outputs = model(imgs)
+                        outputs = non_max_suppression(outputs, conf_thres=conf_thres, nms_thres=nms_thres)
+            
+                    sample_metrics += get_batch_statistics(outputs, targets, iou_threshold=iou_thres)
+            
+                # Concatenate sample statistics
+                true_positives, pred_scores, pred_labels = [np.concatenate(x, 0) for x in list(zip(*sample_metrics))]
+                precision, recall, AP, f1, ap_class = ap_per_class(true_positives, pred_scores, pred_labels, labels)
+            
+                return precision, recall, AP, f1, ap_class
+            
             # Evaluate the model on the validation set
-            precision, recall, AP, f1, ap_class = test.evaluate(
+            precision, recall, AP, f1, ap_class = evaluate(
                 model,
                 path=valid_path,
                 iou_thres=0.5,
                 conf_thres=0.5,
                 nms_thres=0.5,
                 img_size=opt.img_size,
-                batch_size=8,
+                batch_size=4,
             )
             evaluation_metrics = [
                 ("val_precision", precision.mean()),
