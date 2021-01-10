@@ -7,9 +7,9 @@ from PIL import Image
 import torch
 import torch.nn.functional as F
 import tensorflow as tf
-#config = tf.compat.v1.ConfigProto() #Use to fix OOM problems with unet
-#config.gpu_options.allow_growth = True
-#session = tf.compat.v1.Session(config=config)
+config = tf.compat.v1.ConfigProto() #Use to fix OOM problems with unet
+config.gpu_options.allow_growth = True
+session = tf.compat.v1.Session(config=config)
 import matplotlib.pyplot as plt
 from tensorflow.keras import backend as K
 
@@ -22,6 +22,14 @@ from deeptrack.features import Feature
 import skimage.measure
 
 unet=tf.keras.models.load_model('../../input/network-weights/unet-1-dec-1415.h5',compile=False)
+unet.compile()
+# #unet._make_predict_function()
+# sess=tf.compat.v1.Session()
+# sess.run(tf.compat.v1.global_variables_initializer())
+# default_graph = tf.get_default_graph()
+# default_graph.finalize()
+
+
 print_labels = False
 
 length = 128
@@ -344,7 +352,9 @@ class ListDataset(Dataset):
         im=image.update().resolve()#(dX=dX,dA=dA,noise_lev=bgnoiselev,biglam=.3+.5*np.random.randn(),bgnoiseCval=bgnoiseCval,bgnoise=bgnoiselev,bigx0=0)
         print("predicting with GAN")      
         self.im = im
+        # default_graph.as_default():
         v1 = unet.predict(np.expand_dims(im[...,0],axis=0))
+        
         K.clear_session()
         #v1 = im[...,0]
         print("creating labels")
@@ -393,7 +403,6 @@ class ListDataset(Dataset):
             boxes[:, 4] *= h_factor / padded_h
             targets = torch.zeros((len(boxes), 6))
             targets[:, 1:] = boxes
-        self.v1 = targets
 
         print("img shape 2: "+str(img.shape))
         return "", img, targets
@@ -405,7 +414,10 @@ class ListDataset(Dataset):
         # Add sample index to targets
         for i, boxes in enumerate(targets):
             boxes[:, 0] = i
-        targets = torch.cat(targets, 0)
+        try:
+            targets = torch.cat(targets, 0)
+        except:
+            targets = None
         self.batch_count += 1
         return paths, imgs, targets
 

@@ -10,6 +10,7 @@ import test
 from terminaltables import AsciiTable
 
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' #Disable info and warning messsages
 import sys
 import time
 import datetime
@@ -180,13 +181,12 @@ if __name__ == "__main__":
                 labels = []
                 sample_metrics = []  # List of tuples (TP, confs, pred)
                 for batch_i, (_, imgs, targets) in enumerate(tqdm.tqdm(dataloader, desc="Detecting objects")):
-                    print("iteration"+str(batch_i))
+                    print("iteration "+str(batch_i))
                     # Extract labels
                     labels += targets[:, 1].tolist()
                     # Rescale target
                     targets[:, 2:] = xywh2xyxy(targets[:, 2:])
                     targets[:, 2:] *= img_size
-            
                     if len(imgs) == batch_size:
                         imgs = torch.stack(imgs)
                     try:
@@ -194,17 +194,21 @@ if __name__ == "__main__":
                     except:
                         imgs = torch.stack(imgs)
                         imgs = Variable(imgs.type(Tensor), requires_grad=False)
-            
                     with torch.no_grad():
                         outputs = model(imgs)
+                        # for j in range(outputs.shape[0]):
+                        #     test=torch.FloatTensor([output for output in outputs[j] if  not float("Inf") in output])
+                        #    # outputs[j]=Torch.FloatTensor([output for output in outputs[j] if  not float("Inf") in output])
                         outputs = non_max_suppression(outputs, conf_thres=conf_thres, nms_thres=nms_thres)
-            
+                    
                     sample_metrics += get_batch_statistics(outputs, targets, iou_threshold=iou_thres)
             
                 # Concatenate sample statistics
-                true_positives, pred_scores, pred_labels = [np.concatenate(x, 0) for x in list(zip(*sample_metrics))]
-                precision, recall, AP, f1, ap_class = ap_per_class(true_positives, pred_scores, pred_labels, labels)
-            
+                try:
+                    true_positives, pred_scores, pred_labels = [np.concatenate(x, 0) for x in list(zip(*sample_metrics))]
+                    precision, recall, AP, f1, ap_class = ap_per_class(true_positives, pred_scores, pred_labels, labels)
+                except:
+                   return torch.FloatTensor([]),torch.FloatTensor([]),torch.FloatTensor([]),torch.FloatTensor([]),torch.FloatTensor([])
                 return precision, recall, AP, f1, ap_class
             
             # Evaluate the model on the validation set
