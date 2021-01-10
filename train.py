@@ -5,7 +5,10 @@ from utils.logger import *
 from utils.utils import *
 from utils.datasetsNSM import *
 from utils.parse_config import *
-import test
+import tensorflow as tf
+config = tf.compat.v1.ConfigProto() #Use to fix OOM problems with unet
+config.gpu_options.allow_growth = True
+session = tf.compat.v1.Session(config=config)
 
 from terminaltables import AsciiTable
 

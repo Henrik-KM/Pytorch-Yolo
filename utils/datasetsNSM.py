@@ -7,13 +7,12 @@ from PIL import Image
 import torch
 import torch.nn.functional as F
 import tensorflow as tf
-config = tf.compat.v1.ConfigProto() #Use to fix OOM problems with unet
-config.gpu_options.allow_growth = True
-session = tf.compat.v1.Session(config=config)
+# config = tf.compat.v1.ConfigProto() #Use to fix OOM problems with unet
+# config.gpu_options.allow_growth = True
+# session = tf.compat.v1.Session(config=config)
 import matplotlib.pyplot as plt
 from tensorflow.keras import backend as K
 
-from utils.augmentations import horisontal_flip
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
