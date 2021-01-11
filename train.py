@@ -5,10 +5,10 @@ from utils.logger import *
 from utils.utils import *
 from utils.datasetsNSM import *
 from utils.parse_config import *
-import tensorflow as tf
-config = tf.compat.v1.ConfigProto() #Use to fix OOM problems with unet
-config.gpu_options.allow_growth = True
-session = tf.compat.v1.Session(config=config)
+# import tensorflow as tf
+# config = tf.compat.v1.ConfigProto() #Use to fix OOM problems with unet
+# config.gpu_options.allow_growth = True
+# session = tf.compat.v1.Session(config=config)
 
 from terminaltables import AsciiTable
 
@@ -69,7 +69,7 @@ if __name__ == "__main__":
             model.load_darknet_weights(opt.pretrained_weights)
 
     # Get dataloader
-    dataset = ListDataset(train_path, augment=True, multiscale=opt.multiscale_training,totalData = 10)
+    dataset = ListDataset(train_path, augment=True, multiscale=opt.multiscale_training,totalData = 1000)
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=opt.batch_size,
@@ -116,10 +116,6 @@ if __name__ == "__main__":
             targets = Variable(targets.to(device), requires_grad=False)
 
             model=model.float()
-            try:
-                print(np.min(np.array(targets.cpu())))
-            except:
-                print("None")
             loss, outputs = model(imgs, targets)
             loss.backward()
 
@@ -173,8 +169,7 @@ if __name__ == "__main__":
                 model.eval()
             
                 # Get dataloader
-                print("preparing dataset")
-                dataset = ListDataset(path, img_size=img_size, augment=False, multiscale=False,totalData=10)
+                dataset = ListDataset(path, img_size=img_size, augment=False, multiscale=False,totalData=30)
                 dataloader = torch.utils.data.DataLoader(
                     dataset, batch_size=batch_size, shuffle=False, num_workers=1, collate_fn=dataset.collate_fn
                 )
@@ -184,7 +179,7 @@ if __name__ == "__main__":
                 labels = []
                 sample_metrics = []  # List of tuples (TP, confs, pred)
                 for batch_i, (_, imgs, targets) in enumerate(tqdm.tqdm(dataloader, desc="Detecting objects")):
-                    print("iteration "+str(batch_i))
+    
                     # Extract labels
                     labels += targets[:, 1].tolist()
                     # Rescale target
@@ -222,7 +217,7 @@ if __name__ == "__main__":
                 conf_thres=0.5,
                 nms_thres=0.5,
                 img_size=opt.img_size,
-                batch_size=4,
+                batch_size=opt.batch_size,
             )
             evaluation_metrics = [
                 ("val_precision", precision.mean()),

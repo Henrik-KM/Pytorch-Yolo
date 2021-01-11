@@ -256,7 +256,6 @@ def non_max_suppression(prediction, conf_thres=0.5, nms_thres=0.4):
         counter=0
         breakLoopAt = detections.size(0)
         while detections.size(0):
-            print(detections.size(0))
             large_overlap = bbox_iou(detections[0, :4].unsqueeze(0), detections[:, :4]) > nms_thres
             label_match = detections[0, -1] == detections[:, -1]
             # Indices of boxes with lower confidence scores, large IOUs and matching labels
@@ -269,6 +268,7 @@ def non_max_suppression(prediction, conf_thres=0.5, nms_thres=0.4):
             counter+=1
             if counter>2*breakLoopAt:
                 output=[]
+                print("output contains Inf")
                 break
         if keep_boxes and output != []:
             output[image_i] = torch.stack(keep_boxes)

@@ -7,9 +7,9 @@ from PIL import Image
 import torch
 import torch.nn.functional as F
 import tensorflow as tf
-# config = tf.compat.v1.ConfigProto() #Use to fix OOM problems with unet
-# config.gpu_options.allow_growth = True
-# session = tf.compat.v1.Session(config=config)
+config = tf.compat.v1.ConfigProto() #Use to fix OOM problems with unet
+config.gpu_options.allow_growth = True
+session = tf.compat.v1.Session(config=config)
 import matplotlib.pyplot as plt
 from tensorflow.keras import backend as K
 
@@ -31,19 +31,19 @@ unet.compile()
 
 print_labels = False
 
-length = 128
+length = 256
 L_reduction_factor = 1
 reduced_length = int(length/L_reduction_factor)
 
-times = 128
+times = 256
 T_reduction_factor = 1
 reduced_times = int(times/T_reduction_factor)
 
 
 nump = lambda: np.clip(np.random.randint(5),0,2)
 
-Int = lambda : 1e-3*(0.4+0.45*np.random.rand())
-Ds = lambda: 0.10*np.sqrt((0.05 + 2*np.random.rand()))
+Int = lambda : 1e-3*(0.4+0.45*np.random.rand()) #Between 4-8 1e-4 (HC)
+Ds = lambda: 0.10*np.sqrt((0.05 + 2*np.random.rand())) #LD
 st = lambda: 0.04 + 0.01*np.random.rand()
 
 
@@ -303,7 +303,9 @@ class ListDataset(Dataset):
         # ---------
         
         def ConvertTrajToBoundingBoxes(im,length=512,times=128,treshold=0.5):
-            debug=True
+            debug=False
+            if debug:
+                plt.close('all')
             YOLOLabels = [] # Each label has 5 components - image type,x1,x2,y1,y2
             #Labels are ordered as follows: LabelID X_CENTER_NORM Y_CENTER_NORM WIDTH_NORM HEIGHT_NORM, where 
             #X_CENTER_NORM = X_CENTER_ABS/IMAGE_WIDTH
@@ -318,30 +320,32 @@ class ListDataset(Dataset):
                     if np.sum(particleOccurence) <= 0:
                         break
         
-                    x1,x2 = particleOccurence[0][0],particleOccurence[0][-1]
-                    y1,y2 = np.min(particleOccurence[1]),np.max(particleOccurence[1])  
+                    x1,x2 = np.min(particleOccurence[1]),np.max(particleOccurence[1])  
+                    y1,y2 = np.min(particleOccurence[0]),np.max(particleOccurence[0])  
         
                     if YOLOLabels == []:
                         YOLOLabels = np.array([0, np.abs(x2+x1)/2/(times-1), (y2+y1)/2/(length-1),(x2-x1)/(times-1),(y2-y1)/(length-1)]).reshape(1,-1)
                     else:
                         YOLOLabels = np.append(YOLOLabels, np.array([0, np.abs(x2+x1)/2/(times-1), (y2+y1)/2/(length-1),(x2-x1)/(times-1),(y2-y1)/(length-1)]).reshape(1,-1),0)                            
                     nump+=1
+                    
                     if debug:
                         import matplotlib.patches as pch
                         max_nbr_particles = 5
                         nbr_particles = max_nbr_particles
-                        plt.figure(3,figsize=(10,2))
+                        plt.figure(nump+5)#,figsize=(10,2))
                         ax = plt.gca()
+                        plt.imshow(particle_img,aspect='auto')
                         ax.add_patch(pch.Rectangle((x1,y1),x2-x1,y2-y1,fill=False,zorder=2,edgecolor='white'))
                         plt.imshow(particle_img,aspect='auto')
                         plt.colorbar()
-    
-                        
+                       
             except:
                    print("Label generation failed. Continuing..")
+
+            img = np.append(im[...,0:2],im[...,-nump-1:-1].reshape(length,times,-1),2)
             
-        
-            return np.array(YOLOLabels)
+            return np.array(YOLOLabels),np.array(img)
         
 
         image=dt.FlipLR(dt.FlipUD(input_array()+ init_particle_counter() +
@@ -366,7 +370,7 @@ class ListDataset(Dataset):
         
         K.clear_session()
         #v1 = im[...,0]
-        YOLOLabels = ConvertTrajToBoundingBoxes(im,length=length,times=times,treshold=0.5)
+        YOLOLabels,im = ConvertTrajToBoundingBoxes(im,length=length,times=times,treshold=0.5)
         plt.figure(1)
         plt.imshow(im[...,0].T,aspect='auto')
         plt.figure(2)
@@ -409,8 +413,6 @@ class ListDataset(Dataset):
             boxes[:, 4] *= h_factor / padded_h
             targets = torch.zeros((len(boxes), 6))
             targets[:, 1:] = boxes
-
-        print("img shape 2: "+str(img.shape))
         return "", img, targets
 
     def collate_fn(self, batch):
