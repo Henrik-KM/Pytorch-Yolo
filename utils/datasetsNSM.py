@@ -303,6 +303,7 @@ class ListDataset(Dataset):
         # ---------
         
         def ConvertTrajToBoundingBoxes(im,length=512,times=128,treshold=0.5):
+            debug=True
             YOLOLabels = [] # Each label has 5 components - image type,x1,x2,y1,y2
             #Labels are ordered as follows: LabelID X_CENTER_NORM Y_CENTER_NORM WIDTH_NORM HEIGHT_NORM, where 
             #X_CENTER_NORM = X_CENTER_ABS/IMAGE_WIDTH
@@ -312,7 +313,6 @@ class ListDataset(Dataset):
             try:
                 nump = 0
                 while True:
-                    print(str(nump))
                     particle_img = im[...,-nump-1]
                     particleOccurence = np.where(particle_img>treshold)
                     if np.sum(particleOccurence) <= 0:
@@ -320,11 +320,23 @@ class ListDataset(Dataset):
         
                     x1,x2 = particleOccurence[0][0],particleOccurence[0][-1]
                     y1,y2 = np.min(particleOccurence[1]),np.max(particleOccurence[1])  
+        
                     if YOLOLabels == []:
                         YOLOLabels = np.array([0, np.abs(x2+x1)/2/(times-1), (y2+y1)/2/(length-1),(x2-x1)/(times-1),(y2-y1)/(length-1)]).reshape(1,-1)
                     else:
                         YOLOLabels = np.append(YOLOLabels, np.array([0, np.abs(x2+x1)/2/(times-1), (y2+y1)/2/(length-1),(x2-x1)/(times-1),(y2-y1)/(length-1)]).reshape(1,-1),0)                            
                     nump+=1
+                    if debug:
+                        import matplotlib.patches as pch
+                        max_nbr_particles = 5
+                        nbr_particles = max_nbr_particles
+                        plt.figure(3,figsize=(10,2))
+                        ax = plt.gca()
+                        ax.add_patch(pch.Rectangle((x1,y1),x2-x1,y2-y1,fill=False,zorder=2,edgecolor='white'))
+                        plt.imshow(particle_img,aspect='auto')
+                        plt.colorbar()
+    
+                        
             except:
                    print("Label generation failed. Continuing..")
             
@@ -347,28 +359,23 @@ class ListDataset(Dataset):
         
         #b,L = generate_training_batch(image,batch_size)
         
-        print("creating image")
-        im=image.update().resolve()#(dX=dX,dA=dA,noise_lev=bgnoiselev,biglam=.3+.5*np.random.randn(),bgnoiseCval=bgnoiseCval,bgnoise=bgnoiselev,bigx0=0)
-        print("predicting with GAN")      
+        im=image.update().resolve()#(dX=dX,dA=dA,noise_lev=bgnoiselev,biglam=.3+.5*np.random.randn(),bgnoiseCval=bgnoiseCval,bgnoise=bgnoiselev,bigx0=0)   
         self.im = im
         # default_graph.as_default():
         v1 = unet.predict(np.expand_dims(im[...,0],axis=0))
         
         K.clear_session()
         #v1 = im[...,0]
-        print("creating labels")
         YOLOLabels = ConvertTrajToBoundingBoxes(im,length=length,times=times,treshold=0.5)
         plt.figure(1)
         plt.imshow(im[...,0].T,aspect='auto')
         plt.figure(2)
         plt.imshow(np.squeeze(v1).T,aspect='auto')
-        print("v1 shape 1: "+str(v1.shape))
         #v1 = np.sum(v1,1).T
         v1 = v1[0,:,:,:]
         # Extract image as PyTorch tensor
         img = transforms.ToTensor()(v1)
         img = torch.cat(3*[img]) # Convert to 3-channel image to simulate RGB information
-        print("img shape: "+str(img.shape))
         # Handle images with less than three channels ## defunct? 
         if len(img.shape) != 3:
             img = img.unsqueeze(0)
