@@ -10,6 +10,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' #Disable info and warning messsages
+import warnings
+warnings.filterwarnings("ignore", category=Warning)
+
 
 def to_cpu(tensor):
     return tensor.detach().cpu()

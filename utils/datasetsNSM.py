@@ -1,3 +1,64 @@
+from __future__ import absolute_import, division, print_function
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import convolve
+from scipy.signal import convolve2d
+import skimage.measure
+import pandas as pd
+
+import struct
+import numpy as np
+from numpy import expand_dims
+from keras.layers import Conv2D
+from keras.layers import Input
+from keras.layers import BatchNormalization
+from keras.layers import LeakyReLU
+from keras.layers import ZeroPadding2D
+from keras.layers import UpSampling2D
+from keras.layers.merge import add, concatenate
+from keras.models import Model
+from keras.preprocessing.image import load_img
+from keras.preprocessing.image import img_to_array
+from matplotlib import pyplot
+from matplotlib.patches import Rectangle
+
+import sys
+#sys.path.append("..") 
+#!git clone https://github.com/gussjos/DeepTrack-2.0
+import tensorflow as tf
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+  # Restrict TensorFlow to only use the first GPU
+  try:
+    tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
+    logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPU")
+  except RuntimeError as e:
+    # Visible devices must be set before GPUs have been initialized
+    print(e)
+
+#physical_devices=tf.config.experimental.list_physical_devices('GPU')
+#tf.config.experimental.set_memory_growth(physical_devices[0],True)
+#tf.config.gpu.set_per_process_memory_fraction(0.75)
+#tf.config.gpu.set_per_process_memory_growth(True)
+import numpy as np
+import scipy.io as IO
+import matplotlib.pyplot as plt
+from tensorflow import keras
+import scipy.io as IO
+import os
+K=keras.backend
+#sys.path.insert(0,'DeepTrack-2.0/')
+import deeptrack as dt
+# Font parameters
+sz = 14
+plt.rc('font', size=sz)          # controls default text sizes
+plt.rc('axes', titlesize=sz)     # fontsize of the axes title
+plt.rc('axes', labelsize=sz)    # fontsize of the x and y labels
+plt.rc('xtick', labelsize=sz)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=sz)    # fontsize of the tick labels
+plt.rc('legend', fontsize=sz)    # legend fontsize
+plt.rc('figure', titlesize=sz)  # fontsize of the figure title
 import glob
 import random
 import os
@@ -7,12 +68,8 @@ from PIL import Image
 import torch
 import torch.nn.functional as F
 import tensorflow as tf
-config = tf.compat.v1.ConfigProto() #Use to fix OOM problems with unet
-config.gpu_options.allow_growth = True
-session = tf.compat.v1.Session(config=config)
-import matplotlib.pyplot as plt
-from tensorflow.keras import backend as K
 
+from utils.augmentations import horisontal_flip
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
@@ -20,215 +77,175 @@ import deeptrack as dt
 from deeptrack.features import Feature
 import skimage.measure
 
-unet=tf.keras.models.load_model('../../input/network-weights/unet-1-dec-1415.h5',compile=False)
-unet.compile()
-# #unet._make_predict_function()
-# sess=tf.compat.v1.Session()
-# sess.run(tf.compat.v1.global_variables_initializer())
-# default_graph = tf.get_default_graph()
-# default_graph.finalize()
-
-
+unet = tf.keras.models.load_model('../../input/network-weights/unet-1-dec-1415.h5',compile=False)
 print_labels = False
 
-length = 256
+def ConvertTrajToBoundingBoxes(im,length=512,times=128,treshold=0.5):
+    debug=False
+    if debug:
+        plt.close('all')
+    # Each label has 5 components - image type,x1,x2,y1,y2
+    #Labels are ordered as follows: LabelID X_CENTER_NORM Y_CENTER_NORM WIDTH_NORM HEIGHT_NORM, where 
+    #X_CENTER_NORM = X_CENTER_ABS/IMAGE_WIDTH
+    #Y_CENTER_NORM = Y_CENTER_ABS/IMAGE_HEIGHT
+    #WIDTH_NORM = WIDTH_OF_LABEL_ABS/IMAGE_WIDTH
+    #HEIGHT_NORM = HEIGHT_OF_LABEL_ABS/IMAGE_HEIGHT
+    
+
+    
+    try:            
+            nump = im.shape[-1]-2
+            batchSize = im.shape[0]
+            YOLOLabels = np.zeros((batchSize,nump,5))
+            for j in range(0,batchSize):
+                for k in range(0,nump):
+                    particle_img = im[j,:,:,2+k]
+                    particleOccurence = np.where(particle_img>treshold)
+                    if np.sum(particleOccurence) <= 0:
+                        YOLOLabels = np.delete(YOLOLabels,[j,k],1)
+                    else:
+                        x1,x2 = np.min(particleOccurence[1]),np.max(particleOccurence[1])  
+                        y1,y2 = np.min(particleOccurence[0]),np.max(particleOccurence[0])  
+
+                        YOLOLabels[j,k,:] = 0, np.abs(x2+x1)/2/(length-1), (y2+y1)/2/(times-1),(x2-x1)/(length-1),(y2-y1)/(times-1)         
+
+                        if debug:
+                            import matplotlib.patches as pch
+                            max_nbr_particles = 5
+                            nbr_particles = max_nbr_particles
+                            plt.figure()#,figsize=(10,2))
+                            ax = plt.gca()
+                            plt.imshow(particle_img,aspect='auto')
+                            ax.add_patch(pch.Rectangle((x1,y1),x2-x1,y2-y1,fill=False,zorder=2,edgecolor='white'))
+                            plt.imshow(particle_img,aspect='auto')
+                            plt.colorbar()
+
+    except:
+           print("Label generation failed. Continuing..")
+
+    
+
+    return YOLOLabels
+
+nump = lambda: np.clip(np.random.randint(5),0,3)
+length = 128
 L_reduction_factor = 1
 reduced_length = int(length/L_reduction_factor)
 
-times = 256
+times = 128
 T_reduction_factor = 1
 reduced_times = int(times/T_reduction_factor)
 
-
-nump = lambda: np.clip(np.random.randint(5),0,2)
-
-Int = lambda : 1e-3*(0.4+0.45*np.random.rand()) #Between 4-8 1e-4 (HC)
-Ds = lambda: 0.10*np.sqrt((0.05 + 2*np.random.rand())) #LD
+# Particle params
+Int = lambda : 1e-3*(0.1+0.8*np.random.rand())
+Ds = lambda: 0.10*np.sqrt((0.05 + 1*np.random.rand()))
 st = lambda: 0.04 + 0.01*np.random.rand()
 
+# Noise params
+dX=.00001+.00003*np.random.rand()
+dA=0
+noise_lev=.0001
+biglam=0.6+.4*np.random.rand()
+bgnoiseCval=0.03+.02*np.random.rand()
+bgnoise=.08+.04*np.random.rand()
+bigx0=.1*np.random.randn()
 
-class get_diffusion(Feature):
+def generate_trajectories(image,Int,Ds,st,nump):
+    vel = 0
+    length=image.shape[1]
+    times=image.shape[0]
+    x=np.linspace(-1,1,length)
+    t=np.linspace(-1,1,times)
+    X, Y=np.meshgrid(t,x)
+    f2=lambda a,x0,s,b,x: a*np.exp(-(x-x0)**2/s**2)+b
     
-    def __init__(self, vel=0, D=0, I=0, s=0, **kwargs):
-        super().__init__(
-            vel=vel, D=D, I=I,s=s, **kwargs
-        )
-
-    def get(self, image, vel, D, I,s, **kwargs):
-        LOW = 0.01
-        HIGH = 1.5
-        D = (LOW + HIGH*np.random.rand())
-        image.append({"D":D})
+    for p_nbr in range(nump):
+        I = Int()
+        D = Ds()
+        s = st()
         
-        return image
-    
-class init_particle_counter(Feature):
-    
-    def __init__(self, vel=0, D=0, I=0, s=0, **kwargs):
-        super().__init__(
-            vel=vel, D=D, I=I,s=s, **kwargs
-        )
-
-    def get(self, image, vel, D, I,s, **kwargs):
-        
-        # Init particle counter
-        nbr_particles = 0
-        image.append({"nbr_particles":nbr_particles})
-        
-        return image
-    
-class get_trajectory(Feature):
-
-    
-    def __init__(self, vel=0, D=0.1, I=0.1,s=0.05, **kwargs):
-        super().__init__(
-            vel=vel, D=D, I=I,s=s, nbr_particles=0, **kwargs
-        )
-        self.nbrParticles = 0
-
-    def get(self, image, vel, D, I, s, **kwargs):
-        
-        # Particle counter
-        nbr_particles = image.properties[1]['nbr_particles']
-        particle_index = nbr_particles + 1
-        image.properties[1]['nbr_particles'] += 1
-        self.nbrParticles = particle_index
-        
-        length=image.shape[1]
-        times=image.shape[0]
-        x=np.linspace(-1,1,length)
-        t=np.linspace(-1,1,times)
-        X, Y=np.meshgrid(t,x)
-        G= lambda a,b,x0,s,x: a*np.exp(-(x-x0)**2/s**2)+b
-        f2=lambda a,x0,s,b,x: a*np.exp(-(x-x0)**2/s**2)+b
+        # Generate trajectory 
         x0=0
         x0+=np.cumsum(vel+D*np.random.randn(times))
         v1=np.transpose(I*f2(1,x0,s,0,Y))
-        image[...,0]*=(1-v1)
         
+        # Save trajectory with intensity in first image
+        image[...,0] *= (1-v1)##(1-v1)
+
+        # Add trajectory to full segmentation image image
         particle_trajectory = np.transpose(f2(1,x0,0.05,0,Y))
-        
-        # Add trajectory to full image
         image[...,1] += particle_trajectory 
-        
+
         # Save single trajectory as additional image
-        image[...,-particle_index] = particle_trajectory      
+        image[...,-p_nbr-1] = particle_trajectory  
         
-        
-        #image[...,2]+=np.transpose(I*f2(1,x0,s,0,Y))
-        
-        
-        try:
-            image.properties["D"]+=10*D#*np.sum(np.transpose(f2(1,x0,.1,0,Y)))
-            image.properties["I"]+=s*I*np.sqrt(2*np.pi)*256*.03*1000
-        except:
-            image.append({"D":10*D,"I":s*I*np.sqrt(2*np.pi)*256*.03*1000})
-        #print("D:",10*D)
-        #print("I:",I)
-            
-        #imaged_sample[...,0]=v1
-        #imaged_sample.properties=self.properties
-        return image
-    
-class gen_noise(Feature):
-    
-    
-    def __init__(self, noise_lev=0, dX=0, dA=0,biglam=0,bgnoiseCval=0,bgnoise=0,bigx0=0, **kwargs):
-        super().__init__(
-            noise_lev=noise_lev, dX=dX, dA=dA,biglam=biglam,bgnoiseCval=bgnoiseCval,bgnoise=bgnoise,bigx0=bigx0, **kwargs
-        )
+    return image
 
-    def get(self, image, noise_lev, dX, dA,biglam,bgnoiseCval,bgnoise,bigx0, **kwargs):
-        #image=np.zeros((256,512,2))
-        from scipy.signal import convolve
-        
-        length=image.shape[1]
-        times=image.shape[0]
-        x=np.linspace(-1,1,length)
-        t=np.linspace(-1,1,times)
-        X, Y=np.meshgrid(t,x)
-        G= lambda a,b,x0,s,x: a*np.exp(-(x-x0)**2/s**2)+b
-        f2=lambda a,x0,s,b,x: a*np.exp(-(x-x0)**2/s**2)+b
-        bgnoise*=np.random.randn(length)
+def gen_noise(image,dX,dA,noise_lev,biglam,bgnoiseCval,bgnoise,bigx0):
+    length=image.shape[1]
+    times=image.shape[0]
+    x=np.linspace(-1,1,length)
+    t=np.linspace(-1,1,times)
+    X, Y=np.meshgrid(t,x)
+    f2=lambda a,x0,s,b,x: a*np.exp(-(x-x0)**2/s**2)+b
+    bgnoise*=np.random.randn(length)
 
-        tempcorr=3*np.random.rand()
-        dAmp=dA#*np.random.rand()
-        shiftval=dX*np.random.randn()
-        dx=0
-        dx2=0
-        dAmp0=0
-        bg0=f2(1,bigx0,biglam,0,x)
-        ll=(np.pi-.05)
-        for j in range(times):
-            #dx=np.sqrt(1-np.exp(-2/tempcorr))*dX*np.random.randn()+np.exp(-1/tempcorr)*dx
-            #dx2=np.sqrt(1-np.exp(-2/tempcorr))*dX*np.random.randn()+np.exp(-1/tempcorr)*dx2
-            dx=(.7*np.random.randn()+np.sin(ll*j))*dX
-            
-            bgnoiseC=f2(1,0,bgnoiseCval,dx,x)
-            #bgnoiseC2=f2(1,0,bgnoiseCval,dx2+shiftval,x)
-            bgnoiseC/=np.sum(bgnoiseC)
-            bg=f2(1,bigx0+dx,biglam,0,x)*(1+convolve(bgnoise,bgnoiseC,mode="same"))
-            #bg2=f2(1,bigx0+dx2+shiftval,biglam,0,x)+convolve(bgnoise,bgnoiseC2,mode="same")
-            #dAmp0=np.sqrt(1-np.exp(-2/tempcorr))*dAmp*np.random.randn()+np.exp(-1/tempcorr)*dAmp0
-            dAmp0=dA*np.random.randn()
-            bg*=(1+dAmp0)
-            image[j,:,0]=bg*(1+noise_lev*np.random.randn(length))+.4*noise_lev*np.random.randn(length)
-        return image
-
-class post_process(Feature):
+    tempcorr=3*np.random.rand()
+    dAmp=dA#*np.random.rand()
+    shiftval=dX*np.random.randn()
+    dx=0
+    dx2=0
+    dAmp0=0
     
+    bg0=f2(1,bigx0,biglam,0,x)
+    ll=(np.pi-.05)
     
-    def __init__(self, noise_lev=0, dX=0, dA=0, **kwargs):
-        super().__init__(
-            noise_lev=noise_lev, dX=dX, dA=dA, **kwargs
-        )
+    noise_img = np.zeros_like(image)
+    for j in range(times):
+        dx=(.7*np.random.randn()+np.sin(ll*j))*dX
 
-    def get(self, image, **kwargs):
-        from scipy.signal import convolve2d
-        length=image.shape[1]
-        times=image.shape[0]
-        x=np.linspace(-1,1,length)
-        t=np.linspace(-1,1,times)
-        X, Y=np.meshgrid(t,x)
-        G= lambda a,b,x0,s,x: a*np.exp(-(x-x0)**2/s**2)+b
-        f2=lambda a,x0,s,b,x: a*np.exp(-(x-x0)**2/s**2)+b
-        
-        image[:,:,0]/=np.mean(image[...,0],axis=0)#Normalize image by the bare signal
-        
-        image[:,:,0]-=np.expand_dims(np.mean(image[:,:,0],axis=0),axis=0)#Subtract mean over image
+        bgnoiseC=f2(1,0,bgnoiseCval,dx,x)
+        bgnoiseC/=np.sum(bgnoiseC)
+        bg=f2(1,bigx0+dx,biglam,0,x)*(1+convolve(bgnoise,bgnoiseC,mode="same"))
+        dAmp0=dA*np.random.randn()
+        bg*=(1+dAmp0)
+        noise_img[j,:,0]=bg*(1+noise_lev*np.random.randn(length))+.4*noise_lev*np.random.randn(length)
+    return noise_img, bg0
 
-        #Perform same preprocessing as done on experimental images
-        ono=np.ones((200,1))
-        ono[0:80]=1
-        ono[120:]=1
-        ono=ono/np.sum(ono)
-        ono2=np.ones((1,50))
-        ono2/=np.sum(ono2)
-        image[:,:,0]-=convolve2d(image[:,:,0],ono,mode="same")
-        image[:,:,0]-=convolve2d(image[:,:,0],np.transpose(ono),mode="same")
-        
-        
-        
-        image[:,:,0]-=np.expand_dims(np.mean(image[:,:,0],axis=0),axis=0)
-        a=np.std(image[...,0],axis=0)
-        image[:,:,0]/=a
-        try:
-            image.properties["I"]/=a
-        except:
-            pass
-        #image[...,2]/=a
-        #image=np.flip(image,axis=-1)
-        
-        
-        
-        return image
+def post_process(image,bg0):             
+    image[:,:,0]/=bg0 # Normalize image by the bare signal
 
+    image[:,:,0]/=np.mean(image[...,0],axis=0)        
+    image[:,:,0]-=np.expand_dims(np.mean(image[:,:,0],axis=0),axis=0) # Subtract mean over image
+
+    # Perform same preprocessing as done on experimental images
+    ono=np.ones((200,1))
+    ono=ono/np.sum(ono)
+    image[:,:,0]-=convolve2d(image[:,:,0],ono,mode="same")
+    image[:,:,0]-=convolve2d(image[:,:,0],np.transpose(ono),mode="same")
+
+    image[:,:,0]-=np.expand_dims(np.mean(image[:,:,0],axis=0),axis=0)
+    image[:,:,0]*=1000
     
-class input_array(Feature):
-    __distributed__ = False
-    def get(self,image, **kwargs):
-        image=np.zeros((times,length,10))
-        return image
+    return image
+        
+def create_batch(batchsize,times,length,nump):
+    nump = nump() # resolve nump for each batch
+    batch = np.zeros((batchsize,times,length,nump+2))
+    
+    for b in range(batchsize):
+        image = np.zeros((times,length,nump+2))
+        
+        # Add noise to image
+        noise_image, bg0 = gen_noise(image,dX,dA,noise_lev,biglam,bgnoiseCval,bgnoise,bigx0)
+        image = generate_trajectories(noise_image,Int,Ds,st,nump)
+        
+        # Post process
+        image = post_process(image,bg0)
+        
+        batch[b,...] = image
+    
+    return batch
 
 
 def pad_to_square(img, pad_value):
@@ -277,13 +294,11 @@ class ImageFolder(Dataset):
 
 class ListDataset(Dataset):
     def __init__(self, list_path, img_size=416, augment=False, multiscale=False, normalized_labels=True,totalData=1000):
-        with open(list_path, "r") as file:
-            self.img_files = file.readlines()
+        
+        self.img_files = ""
 
-        self.label_files = [
-            path.replace("images", "labels").replace(".png", ".txt").replace(".jpg", ".txt")
-            for path in self.img_files
-        ]
+        self.label_files = ""
+        
         self.img_size = img_size
         self.max_objects = 100
         self.augment = augment
@@ -293,8 +308,6 @@ class ListDataset(Dataset):
         self.max_size = self.img_size + 3 * 32
         self.batch_count = 0
         self.totalData = totalData
-        self.v1 = []
-        self.im = []
 
     def __getitem__(self, index):
 
@@ -302,84 +315,20 @@ class ListDataset(Dataset):
         #  Image
         # ---------
         
-        def ConvertTrajToBoundingBoxes(im,length=512,times=128,treshold=0.5):
-            debug=False
-            if debug:
-                plt.close('all')
-            YOLOLabels = [] # Each label has 5 components - image type,x1,x2,y1,y2
-            #Labels are ordered as follows: LabelID X_CENTER_NORM Y_CENTER_NORM WIDTH_NORM HEIGHT_NORM, where 
-            #X_CENTER_NORM = X_CENTER_ABS/IMAGE_WIDTH
-            #Y_CENTER_NORM = Y_CENTER_ABS/IMAGE_HEIGHT
-            #WIDTH_NORM = WIDTH_OF_LABEL_ABS/IMAGE_WIDTH
-            #HEIGHT_NORM = HEIGHT_OF_LABEL_ABS/IMAGE_HEIGHT
-            try:
-                nump = 0
-                while True:
-                    particle_img = im[...,-nump-1]
-                    particleOccurence = np.where(particle_img>treshold)
-                    if np.sum(particleOccurence) <= 0:
-                        break
-        
-                    x1,x2 = np.min(particleOccurence[1]),np.max(particleOccurence[1])  
-                    y1,y2 = np.min(particleOccurence[0]),np.max(particleOccurence[0])  
-        
-                    if YOLOLabels == []:
-                        YOLOLabels = np.array([0, np.abs(x2+x1)/2/(times-1), (y2+y1)/2/(length-1),(x2-x1)/(times-1),(y2-y1)/(length-1)]).reshape(1,-1)
-                    else:
-                        YOLOLabels = np.append(YOLOLabels, np.array([0, np.abs(x2+x1)/2/(times-1), (y2+y1)/2/(length-1),(x2-x1)/(times-1),(y2-y1)/(length-1)]).reshape(1,-1),0)                            
-                    nump+=1
-                    
-                    if debug:
-                        import matplotlib.patches as pch
-                        max_nbr_particles = 5
-                        nbr_particles = max_nbr_particles
-                        plt.figure(nump+5)#,figsize=(10,2))
-                        ax = plt.gca()
-                        plt.imshow(particle_img,aspect='auto')
-                        ax.add_patch(pch.Rectangle((x1,y1),x2-x1,y2-y1,fill=False,zorder=2,edgecolor='white'))
-                        plt.imshow(particle_img,aspect='auto')
-                        plt.colorbar()
-                       
-            except:
-                   print("Label generation failed. Continuing..")
-
-            img = np.append(im[...,0:2],im[...,-nump-1:-1].reshape(length,times,-1),2)
-            
-            return np.array(YOLOLabels),np.array(img)
+        batchsize = 1
+        im = create_batch(batchsize,times,length,nump)
+        print(im.shape)
+        v1 = unet.predict(np.expand_dims(im[...,0],axis=-1))
+        YOLOLabels = ConvertTrajToBoundingBoxes(im,length=length,times=times,treshold=0.5)
+        print(v1.shape)
+        print(YOLOLabels.shape)
         
 
-        image=dt.FlipLR(dt.FlipUD(input_array()+ init_particle_counter() +
-                                                          gen_noise(dX=.00001+.00003*np.random.rand(),
-                                                          dA=0,
-                                                          noise_lev=.0001,
-                                                          #noise_lev = 0.0001*(0.75+0.75*np.random.rand()),
-                                                          biglam=0.6+.4*np.random.rand(),
-                                                          bgnoiseCval=0.03+.02*np.random.rand(),
-                                                          #bgnoiseCval=0.03+.05*np.random.rand(),
-                                                          #bgnoise=.08+.14*np.random.rand(),
-                                                          bgnoise=.08+.04*np.random.rand(),
-                                                          bigx0=lambda: .1*np.random.randn())
-                                  +get_trajectory(D=Ds, I=Int,s=st,)**nump+post_process()))
-        
-        #b,L = generate_training_batch(image,batch_size)
-        
-        im=image.update().resolve()#(dX=dX,dA=dA,noise_lev=bgnoiselev,biglam=.3+.5*np.random.randn(),bgnoiseCval=bgnoiseCval,bgnoise=bgnoiselev,bigx0=0)   
-        self.im = im
-        # default_graph.as_default():
-        v1 = unet.predict(np.expand_dims(im[...,0],axis=0))
-        
-        K.clear_session()
-        #v1 = im[...,0]
-        YOLOLabels,im = ConvertTrajToBoundingBoxes(im,length=length,times=times,treshold=0.5)
-        plt.figure(1)
-        plt.imshow(im[...,0].T,aspect='auto')
-        plt.figure(2)
-        plt.imshow(np.squeeze(v1).T,aspect='auto')
-        #v1 = np.sum(v1,1).T
-        v1 = v1[0,:,:,:]
+        v1 = np.sum(v1,1).T
         # Extract image as PyTorch tensor
         img = transforms.ToTensor()(v1)
         img = torch.cat(3*[img]) # Convert to 3-channel image to simulate RGB information
+
         # Handle images with less than three channels ## defunct? 
         if len(img.shape) != 3:
             img = img.unsqueeze(0)
@@ -393,26 +342,28 @@ class ListDataset(Dataset):
         # ---------
         #  Label
         # ---------
-        targets = None   
-        if len(YOLOLabels) > 0:
-            boxes = torch.from_numpy(YOLOLabels).reshape(-1,5)#torch.from_numpy(np.loadtxt(label_path).reshape(-1, 5))
-            # Extract coordinates for unpadded + unscaled image
-            x1 = w_factor * (boxes[:, 1] - boxes[:, 3] / 2)
-            y1 = h_factor * (boxes[:, 2] - boxes[:, 4] / 2)
-            x2 = w_factor * (boxes[:, 1] + boxes[:, 3] / 2)
-            y2 = h_factor * (boxes[:, 2] + boxes[:, 4] / 2)
-            # Adjust for added padding
-            x1 += pad[0]
-            y1 += pad[2]
-            x2 += pad[1]
-            y2 += pad[3]
-            # Returns (x, y, w, h)
-            boxes[:, 1] = ((x1 + x2) / 2) / padded_w
-            boxes[:, 2] = ((y1 + y2) / 2) / padded_h
-            boxes[:, 3] *= w_factor / padded_w
-            boxes[:, 4] *= h_factor / padded_h
-            targets = torch.zeros((len(boxes), 6))
-            targets[:, 1:] = boxes
+
+        targets = None       
+        boxes = torch.from_numpy(YOLOLabels).reshape(-1,5)#torch.from_numpy(np.loadtxt(label_path).reshape(-1, 5))
+        # Extract coordinates for unpadded + unscaled image
+        x1 = w_factor * (boxes[:, 1] - boxes[:, 3] / 2)
+        y1 = h_factor * (boxes[:, 2] - boxes[:, 4] / 2)
+        x2 = w_factor * (boxes[:, 1] + boxes[:, 3] / 2)
+        y2 = h_factor * (boxes[:, 2] + boxes[:, 4] / 2)
+        # Adjust for added padding
+        x1 += pad[0]
+        y1 += pad[2]
+        x2 += pad[1]
+        y2 += pad[3]
+        # Returns (x, y, w, h)
+        boxes[:, 1] = ((x1 + x2) / 2) / padded_w
+        boxes[:, 2] = ((y1 + y2) / 2) / padded_h
+        boxes[:, 3] *= w_factor / padded_w
+        boxes[:, 4] *= h_factor / padded_h
+        targets = torch.zeros((len(boxes), 6))
+        targets[:, 1:] = boxes
+        print(img.shape)
+        img = np.expand_dims(img,-1)
         return "", img, targets
 
     def collate_fn(self, batch):
@@ -422,10 +373,7 @@ class ListDataset(Dataset):
         # Add sample index to targets
         for i, boxes in enumerate(targets):
             boxes[:, 0] = i
-        try:
-            targets = torch.cat(targets, 0)
-        except:
-            targets = None
+        targets = torch.cat(targets, 0)
         self.batch_count += 1
         return paths, imgs, targets
 
